@@ -6,7 +6,7 @@
 #             and .DIC files for Hunspell, tailoring them for some
 #             already existing .AFF file.
 
-VERSION = 0.1
+VERSION = 0.2
 
 ###############################################################################
 
@@ -30,7 +30,7 @@ class Alphabet
   def encode_word(word)
     word.each_char.map do |ch|
       unless @char_to_idx.has_key?(ch)
-        raise "Can't add character '#{ch}' to the finalized alphabet.\n" if @finalized
+        raise "The character «#{ch}» is missing from the alphabet.\n" if @finalized
         @char_to_idx[ch] = @idx_to_char.size
         @idx_to_char.push(ch)
       end
@@ -178,6 +178,7 @@ class AFF
     @prefixes = Ruleset.new(@alphabet, RULESET_PREFIX + opt)
     @suffixes = Ruleset.new(@alphabet, RULESET_SUFFIX + opt)
     @fullstrip = false
+    @vstemflag = ""
     flag = ""
     cnt = 0
     affdata.each_line do |l|
@@ -185,8 +186,12 @@ class AFF
         raise "Malformed TRY directive #{l.strip}.\n" if $2.strip.size > 0
         @alphabet.encode_word($1)
         @alphabet.finalized_size
-      elsif l =~ /^\s*FULLSTRIP\s*(\s+.*)?$/
+      elsif l =~ /^(\s*)FULLSTRIP\s*(\s+.*)?$/
+        raise "Malformed FULLSTRIP directive (indented).\n" unless $1 == ""
         @fullstrip = true
+      elsif l =~ /^(\s*)NEEDAFFIX\s+(\S+)$/
+        raise "Malformed NEEDAFFIX directive (indented).\n" unless $1 == ""
+        @vstemflag = $2
       elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+Y\s+(\d+)\s*(.*)$/
         type = $1
         flag = $2
@@ -251,7 +256,7 @@ class AFF
       word = @alphabet.encode_word((word_utf8 || "").strip)
       flags = Set.new((joined_flags || "").split(""))
 
-      yield @alphabet.decode_word(word)
+      yield @alphabet.decode_word(word) unless flags === @vstemflag
 
       prefixes.matched_rules(word) do |pfx|
         # Handle single prefixes without any suffix
@@ -283,9 +288,10 @@ end
 
 ###############################################################################
 
-def convert_dic_to_txt(aff_file, dic_file, out_file = nil)
-  aff = AFF.new(aff_file, "’-")
+def convert_dic_to_txt(aff_file, dic_file, delimiter = nil, out_file = nil)
+  aff = AFF.new(aff_file, "")
   wordlist = {"" => true}.clear
+  stemwordlist = {"" => true}.clear
   firstline = true
   alreadywarned = false
 
@@ -312,7 +318,18 @@ def convert_dic_to_txt(aff_file, dic_file, out_file = nil)
       STDERR.puts "Malformed .DIC file: an unexpected empty line."
       alreadywarned = true
     else
-      aff.decode_dic_entry(l) {|word| wordlist[word] = true }
+      if delimiter
+        stemwordlist.clear
+        aff.decode_dic_entry(l) {|word| stemwordlist[word] = true }
+        if l =~ /^\s*([^\/\s]+)/ && stemwordlist.size > 1 && stemwordlist.has_key?($1)
+          stemwordlist.delete($1)
+          wordlist[$1 + delimiter + stemwordlist.keys.sort.join(delimiter)] = true
+        else
+          stemwordlist.each_key {|word| wordlist[word] = true }
+        end
+      else
+        aff.decode_dic_entry(l) {|word| wordlist[word] = true }
+      end
       real_number_of_stems += 1
     end
   end
@@ -392,6 +409,15 @@ def run_tests
                    SFX B Y 1
                    SFX B екар ыжка лекар", "лекар/AB",
                    ["лекар", "лыжка", "сьвіньня", "шчотка"])
+
+  # the NEEDAFFIX flag turns "лекар" into a "virtual" stem, which isn't a word
+  test_dic_to_txt("NEEDAFFIX z
+                   PFX A Y 2
+                   PFX A лыжка сьвіньня лыжка
+                   PFX A лыж шчот лыж
+                   SFX B Y 1
+                   SFX B екар ыжка лекар", "лекар/ABz",
+                   ["лыжка", "шчотка"])
 end
 
 ###############################################################################
@@ -428,12 +454,18 @@ unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
   puts "Where options can be:"
   puts "  -v                      : verbose diagnostic messages to stderr"
   puts
-  puts "  -i=[txt|dic]            : the input file format:"
+  puts "  -i=[dic|txt|csv]        : the input file format:"
   puts "                             * txt - plain wordlist (TODO)"
   puts "                             * dic - dic file with word stems"
   puts
-  puts "  -o=[txt|dic|js|lua]     : the desired output file format:"
-  puts "                             * txt - plain wordlist"
+  puts "  -o=[dic|txt|csv|js|lua] : the desired output file format:"
+  puts "                             * txt - text file with one word per line,"
+  puts "                                     all words are unique and presented"
+  puts "                                     in a sorted order."
+  puts "                             * csv - text file with one stem per line,"
+  puts "                                     followed by the comma separated"
+  puts "                                     words that had been derived from"
+  puts "                                     it via applying affixes."
   puts "                             * dic - dic file with word stems (TODO)"
   puts "                             * js  - JavaScript code (TODO)"
   puts "                             * lua - Lua code (TODO)"
@@ -447,13 +479,23 @@ end
 # Automatically guess the input/output format from the file extension
 input_format="dic" if input_format == "unk" && args.size >= 2 && args[1] =~ /\.dic$/i
 input_format="txt" if input_format == "unk" && args.size >= 2 && args[1] =~ /\.txt$/i
+input_format="csv" if input_format == "unk" && args.size >= 2 && args[1] =~ /\.csv$/i
 output_format="dic" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.dic$/i
 output_format="txt" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.txt$/i
+output_format="csv" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.csv$/i
+
+# Default to the comma separated text output
+output_format = "csv" if output_format == "unk" && args.size == 2 && input_format == "dic"
 
 ###############################################################################
 
 if input_format == "dic" && output_format == "txt" && args.size >= 2
-  convert_dic_to_txt(args[0], args[1], (args.size >= 3 ? args[2] : nil))
+  convert_dic_to_txt(args[0], args[1], nil, (args.size >= 3 ? args[2] : nil))
+  exit 0
+end
+
+if input_format == "dic" && output_format == "csv" && args.size >= 2
+  convert_dic_to_txt(args[0], args[1], ", ", (args.size >= 3 ? args[2] : nil))
   exit 0
 end
 
