@@ -6,7 +6,7 @@
 #             and .DIC files for Hunspell, tailoring them for some
 #             already existing .AFF file.
 
-VERSION = 0.3
+VERSION = 0.4
 
 ###############################################################################
 
@@ -70,7 +70,8 @@ class Alphabet
     word.each_char do |ch|
       unless @char_to_idx.has_key?(ch)
         if @finalized
-          raise "Bad character «#{ch}». Add it to the alphabet via TRY directive in .AFF\n"
+          raise "Bad character «#{ch}» found while processing «#{word}». " +
+                "Add it to the alphabet via TRY directive in .AFF\n"
         end
         @char_to_idx[ch] = U8_0 + @idx_to_char.size
         @idx_to_char << ch
@@ -217,7 +218,7 @@ class AFF
   def initialize(aff_file, charlist = "", opt = RULESET_FROM_STEM)
     affdata = (((opt & RULESET_TESTSTRING) != 0) ? aff_file
                                                  : File.open(aff_file))
-    @alphabet = Alphabet.new(charlist)
+    @alphabet = Alphabet.new("-" + charlist)
     @prefixes_from_stem = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_FROM_STEM)
     @suffixes_from_stem = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_FROM_STEM)
     @prefixes_to_stem   = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_TO_STEM)
@@ -228,9 +229,11 @@ class AFF
     cnt = 0
     affdata.each_line do |l|
       if l =~ /^\s*TRY\s+(\S+)(.*)$/
-        raise "Malformed TRY directive #{l.strip}.\n" if $2.strip.size > 0
         @alphabet.encode_word($1)
-        @alphabet.finalized_size
+      elsif l =~ /^\s*WORDCHARS\s+(\S+)(.*)$/
+        @alphabet.encode_word($1)
+      elsif l =~ /^\s*BREAK\s+(\S+)(.*)$/
+        @alphabet.encode_word($1)
       elsif l =~ /^(\s*)FULLSTRIP\s*(\s+.*)?$/
         raise "Malformed FULLSTRIP directive (indented).\n" unless $1 == ""
         @fullstrip = true
@@ -241,6 +244,7 @@ class AFF
         type = $1
         flag = $2
         cnt = $3.to_i
+        @alphabet.finalized_size
       elsif l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/
         type = $1
         unless flag == $2
