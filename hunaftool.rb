@@ -6,7 +6,7 @@
 #             and .DIC files for Hunspell, tailoring them for some
 #             already existing .AFF file.
 
-VERSION = 0.4
+VERSION = 0.5
 
 ###############################################################################
 
@@ -40,8 +40,14 @@ require "set"
 # readily available for future use.
 ###############################################################################
 
-U8_0 = "\0".bytes.first   # 8-bit zero constant for Crystal compatibility
-                          # to hint the usage of UInt8 instead of Int32
+# This is how runing under Crystal can be detected.
+COMPILED_BY_CRYSTAL = (((1 / 2) * 2) != 0)
+
+# An 8-bit zero constant to hint the use of UInt8 instead of Int32 for Crystal
+U8_0 = "\0".bytes.first
+
+# A 64-bit zero constant to hint the use of Int64 instead of Int32 for Crystal
+I64_0 = (0x3FFFFFFFFFFFFFFF & 0)
 
 ###############################################################################
 # Remap UTF-8 words to indexable 8-bit arrays for performance reasons. All
@@ -87,6 +93,146 @@ class Alphabet
   end
 end
 
+###############################################################################
+# Parsing and management of the affix flags
+#
+# For a relatively small number of flags, it's possible to store all
+# of them in the bits of a 64-bit integer variable. This works very
+# fast and also reduces the memory footprint. Many real dictionaries
+# don't need many flags. For example, the Belarusian dictionary at
+# https://github.com/375gnu/spell-be-tarask only uses 44 distinct
+# flags.
+#
+# But supporting a large number of flags is still necessary too. For
+# example, to handle the AFF+DIC pairs produced by the "affixcompress"
+# tool. The number of flags in these generated files may be 5000 or more.
+#
+# Note: the Ruby interpreter switches to a slow BigInt implementation for
+#       anything that requires more than 62 bits, so the practical limit
+#       is actually a bit lower.
+###############################################################################
+
+module AffFlags
+  UTF8                      = 1    # "FLAG UTF-8" option in the affix file
+  LONG                      = 2    # "FLAG long" option in the affix file
+  NUM                       = 3    # "FLAG num" option in the affix file
+
+  SWITCH_TO_HASH_THRESHOLD  = 63
+
+  @@mode                  = UTF8
+  @@flagname_s_to_bitpos  = {"A" => 0}.clear
+  @@flagname_ch_to_bitpos = {'A' => 0}.clear
+  @@bitpos_to_flagname    = ["A"].clear
+
+  def self.mode ; @@mode end
+  def self.mode=(newmode)
+    @@mode = newmode
+    @@flagname_s_to_bitpos.clear
+    @@flagname_ch_to_bitpos.clear
+    @@bitpos_to_flagname.clear
+  end
+  def self.flagname_s_to_bitpos ; @@flagname_s_to_bitpos end
+  def self.flagname_ch_to_bitpos ; @@flagname_ch_to_bitpos end
+  def self.bitpos_to_flagname ; @@bitpos_to_flagname end
+  def self.need_hash? ; @@bitpos_to_flagname.size >= SWITCH_TO_HASH_THRESHOLD end
+
+  def self.register_flag(flagname)
+    return if @@flagname_s_to_bitpos.has_key?(flagname)
+    @@flagname_s_to_bitpos[flagname] = @@bitpos_to_flagname.size
+    if flagname.size == 1
+      @@flagname_ch_to_bitpos[flagname[0]] = @@bitpos_to_flagname.size
+    end
+    @@bitpos_to_flagname << flagname
+  end
+end
+
+class String
+  def to_aff_flags
+    if AffFlags.need_hash?
+      tmp = {0 => true}.clear
+      case AffFlags.mode when AffFlags::LONG
+        raise "The flags field '#{self}' must have an even number of characters\n" if size.odd?
+        self.scan(/(..)/) { tmp[AffFlags.flagname_s_to_bitpos[$1]] = true }
+      when AffFlags::NUM then
+        unless self.strip.empty?
+          self.split(',').each {|chunk| tmp[AffFlags.flagname_s_to_bitpos[chunk.strip]] = true }
+        end
+      else
+        self.each_char {|ch| tmp[AffFlags.flagname_ch_to_bitpos[ch]] = true }
+      end
+      tmp
+    else
+      tmp = I64_0
+      case AffFlags.mode when AffFlags::LONG
+        raise "The flags field '#{self}' must have an even number of characters\n" if size.odd?
+        self.scan(/(..)/) { tmp |= ((I64_0 + 1) << AffFlags.flagname_s_to_bitpos[$1]) }
+      when AffFlags::NUM then
+        unless self.strip.empty?
+          self.split(',').each {|chunk| tmp |= ((I64_0 + 1) << AffFlags.flagname_s_to_bitpos[chunk.strip]) }
+        end
+      else
+        self.each_char {|ch| tmp |= ((I64_0 + 1) << AffFlags.flagname_ch_to_bitpos[ch]) }
+      end
+      tmp
+    end
+  end
+end
+
+def aff_flags_to_s(flags)
+  if flags.is_a?(Hash)
+    flags.keys.map {|idx| AffFlags.bitpos_to_flagname[idx] }.sort
+      .join((AffFlags.mode == AffFlags::NUM) ? "," : "")
+  else
+    AffFlags.bitpos_to_flagname
+      .each_index.select {|idx| (((I64_0 + 1) << idx) & flags) != 0 }
+      .map {|idx| AffFlags.bitpos_to_flagname[idx] }.to_a.sort
+      .join((AffFlags.mode == AffFlags::NUM) ? "," : "")
+  end
+end
+
+def aff_flags_empty?(flags)
+  if flags.is_a?(Hash)
+    flags.empty?
+  else
+    flags == 0
+  end
+end
+
+def aff_flags_intersect?(flags1, flags2)
+  if !flags1.is_a?(Hash) && !flags2.is_a?(Hash)
+    (flags1 & flags2) != 0
+  elsif flags1.is_a?(Hash) && flags2.is_a?(Hash)
+    flags2.each_key {|k| return true if flags1.has_key?(k) }
+    false
+  else
+    raise "aff_flags_intersect?(#{flags1}, #{flags2})\n"
+  end
+end
+
+def aff_flags_merge!(flags1, flags2)
+  if !flags1.is_a?(Hash) && !flags2.is_a?(Hash)
+    flags1 |= flags2
+  elsif flags1.is_a?(Hash) && flags2.is_a?(Hash)
+    flags2.each_key {|k| flags1[k] = true }
+    flags1
+  else
+    raise "aff_flags_merge!(#{flags1}, #{flags2})\n"
+  end
+end
+
+def aff_flags_delete!(flags1, flags2)
+  if !flags1.is_a?(Hash) && !flags2.is_a?(Hash)
+    flags1 &= ~flags2
+  elsif flags1.is_a?(Hash) && flags2.is_a?(Hash)
+    flags2.each_key {|k| flags1.delete(k) }
+    flags1
+  else
+    raise "aff_flags_delete!(#{flags1}, #{flags2})\n"
+  end
+end
+
+###############################################################################
+
 def parse_condition(alphabet, condition)
   out = ["".bytes].clear
   condition.scan(/\[\^([^\]]*)\]|\[([^\]\^]*)\]|(.)/) do
@@ -106,7 +252,8 @@ end
 
 # That's an affix rule, pretty much in the same format as in .AFF files
 class Rule
-  def initialize(flag = "?", stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
+  def initialize(flag = I64_0, stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
+    @flag = {0 => true}.clear if AffFlags.need_hash?
     @flag, @stripping, @affix, @condition, @rawsrc = flag, stripping, affix, condition, rawsrc
   end
   def flag       ; @flag      end
@@ -119,7 +266,8 @@ end
 # That's a processed result of matching a rule. It may be adjusted
 # depending on what is the desired result.
 class AffixMatch
-  def initialize(flag = "?", remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes, rawsrc = "")
+  def initialize(flag = I64_0, remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes, rawsrc = "")
+    @flag = {0 => true}.clear if AffFlags.need_hash?
     @flag, @remove_left, @append_left, @remove_right, @append_right, @rawsrc =
       flag, remove_left, append_left, remove_right, append_right, rawsrc
   end
@@ -217,14 +365,33 @@ end
 class AFF
   def initialize(aff_file, charlist = "", opt = RULESET_FROM_STEM)
     affdata = (((opt & RULESET_TESTSTRING) != 0) ? aff_file
-                                                 : File.open(aff_file))
+                                                 : File.read(aff_file))
+    virtual_stem_flag_s = ""
+    AffFlags.mode = AffFlags::UTF8
+    # The first pass to count the number of flags
+    affdata.each_line do |l|
+      if l =~ /^FLAG (\S+)/
+        case $1
+          when "UTF-8" then AffFlags.mode = AffFlags::UTF8
+          when "long"  then AffFlags.mode = AffFlags::LONG
+          when "num"   then AffFlags.mode = AffFlags::NUM
+          else raise "Unknown FLAG option #{$1}\n" end
+      elsif l =~ /^([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/
+        AffFlags.register_flag($2)
+      elsif l =~ /^NEEDAFFIX\s+(\S+)$/
+        AffFlags.register_flag(virtual_stem_flag_s = $1)
+      end
+    end
+
+    # The second pass to do the rest
     @alphabet = Alphabet.new("-" + charlist)
     @prefixes_from_stem = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_FROM_STEM)
     @suffixes_from_stem = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_FROM_STEM)
     @prefixes_to_stem   = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_TO_STEM)
     @suffixes_to_stem   = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_TO_STEM)
     @fullstrip = false
-    @virtual_stem_flag = ""
+    @virtual_stem_flag = AffFlags.need_hash? ? {0 => true}.clear : I64_0
+    @virtual_stem_flag = virtual_stem_flag_s.to_aff_flags
     flag = ""
     cnt = 0
     affdata.each_line do |l|
@@ -237,9 +404,6 @@ class AFF
       elsif l =~ /^(\s*)FULLSTRIP\s*(\s+.*)?$/
         raise "Malformed FULLSTRIP directive (indented).\n" unless $1 == ""
         @fullstrip = true
-      elsif l =~ /^(\s*)NEEDAFFIX\s+(\S+)$/
-        raise "Malformed NEEDAFFIX directive (indented).\n" unless $1 == ""
-        @virtual_stem_flag = $2
       elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+Y\s+(\d+)\s*(.*)$/
         type = $1
         flag = $2
@@ -263,7 +427,7 @@ class AFF
           next
         end
         condition = condition.gsub(/#{stripping}$/, "")
-        rule = Rule.new(flag, @alphabet.encode_word(stripping),
+        rule = Rule.new(flag.to_aff_flags, @alphabet.encode_word(stripping),
                         @alphabet.encode_word(affix), condition, l.strip)
         if type == "S"
           @suffixes_from_stem.add_rule(rule)
@@ -307,30 +471,30 @@ class AFF
   # decode a single line from a .DIC file
   def decode_dic_entry(line)
     if line =~ /^([^\/]+)\/?(\S*)/
-      word_utf8, joined_flags = $~.captures
-      word = @alphabet.encode_word((word_utf8 || "").strip)
-      flags = Set.new((joined_flags || "").split(""))
+      stem_field, flags_field = $~.captures
+      word = @alphabet.encode_word((stem_field || "").strip)
+      flags = (flags_field || "").to_aff_flags
 
-      if @virtual_stem_flag.empty? || !(flags === @virtual_stem_flag)
+      unless aff_flags_intersect?(flags, @virtual_stem_flag)
         yield @alphabet.decode_word(word)
       end
 
       prefixes_from_stem.matched_rules(word) do |pfx|
         # Handle single prefixes without any suffix
-        if flags === pfx.flag && tmpbuf_apply_prefix(word, pfx)
+        if aff_flags_intersect?(flags, pfx.flag) && tmpbuf_apply_prefix(word, pfx)
           yield @alphabet.decode_word(@tmpbuf)
         end
       end
 
       suffixes_from_stem.matched_rules(word) do |sfx|
-        if flags === sfx.flag && tmpbuf_apply_suffix(word, sfx)
+        if aff_flags_intersect?(flags, sfx.flag) && tmpbuf_apply_suffix(word, sfx)
 
           # Handle single suffixes
           yield @alphabet.decode_word(@tmpbuf)
 
           # And try to also apply prefix after each successful suffix substitution
           prefixes_from_stem.matched_rules(@tmpbuf) do |pfx|
-            if flags === pfx.flag && (@tmpbuf.size != pfx.remove_left || @fullstrip)
+            if aff_flags_intersect?(flags, pfx.flag) && (@tmpbuf.size != pfx.remove_left || @fullstrip)
               @tmpbuf2.clear
               @tmpbuf2.concat(pfx.append_left)
               (pfx.remove_left ... @tmpbuf.size).each {|i| @tmpbuf2 << @tmpbuf[i] }
@@ -405,13 +569,15 @@ end
 class WordData
   def initialize(encword = "".bytes)
     @encword  = encword
-    @flags    = [""].to_set.clear
+    @flags    = AffFlags.need_hash? ? {0 => true}.clear : I64_0
     @covers   = [0].to_set.clear
   end
 
-  def encword       ; @encword end
-  def flags         ; @flags end
-  def covers        ; @covers end
+  def encword             ; @encword end
+  def flags               ; @flags end
+  def covers              ; @covers end
+  def flags_merge(flags)  ; @flags = aff_flags_merge!(@flags, flags) end
+  def flags_delete(flags) ; @flags = aff_flags_delete!(@flags, flags) end
 end
 
 ###############################################################################
@@ -451,13 +617,13 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
       tmpbuf.concat(sfx.append_right)
 
       if (stem_idx = encword_to_idx.fetch(tmpbuf, -1)) != -1
-        idx_to_data[stem_idx].flags.add(sfx.flag)
-      elsif !aff.virtual_stem_flag.empty?
+        idx_to_data[stem_idx].flags_merge(sfx.flag)
+      elsif !aff_flags_empty?(aff.virtual_stem_flag)
         tmpbuf2 = tmpbuf.dup
         stem_idx = idx_to_data.size
         encword_to_idx[tmpbuf2] = idx_to_data.size
         data = WordData.new(tmpbuf2)
-        data.flags.add(sfx.flag)
+        data.flags_merge(sfx.flag)
         idx_to_data.push(data)
       end
     end
@@ -466,18 +632,18 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
   # Going from stems to the affixed words that they produce, identify and
   # remove all invalid flags
   idx_to_data.each_with_index do |data, idx|
-    next if data.flags.empty?
+    next if aff_flags_empty?(data.flags)
     encstem = data.encword
     aff.suffixes_from_stem.matched_rules(encstem) do |sfx|
       next if encstem.size == sfx.remove_right && !aff.fullstrip?
-      next unless data.flags === sfx.flag
+      next unless aff_flags_intersect?(data.flags, sfx.flag)
 
       tmpbuf.clear
       (0 ... encstem.size - sfx.remove_right).each {|i| tmpbuf << encstem[i] }
       tmpbuf.concat(sfx.append_right)
 
       if encword_to_idx.fetch(tmpbuf, virtual_stem_area_begin) >= virtual_stem_area_begin
-        data.flags.delete(sfx.flag)
+        data.flags_delete(sfx.flag)
       end
     end
   end
@@ -485,14 +651,14 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
   # Now that all flags are valid, retrive the full list of words that can
   # be generated from this stem
   idx_to_data.each_with_index do |data, idx|
-    next if data.flags.empty?
+    next if aff_flags_empty?(data.flags)
     encstem = data.encword
 
     data.covers.add(idx) unless idx >= virtual_stem_area_begin
 
     aff.suffixes_from_stem.matched_rules(encstem) do |sfx|
       next if encstem.size == sfx.remove_right && !aff.fullstrip?
-      next unless data.flags === sfx.flag
+      next unless aff_flags_intersect?(data.flags, sfx.flag)
 
       tmpbuf.clear
       (0 ... encstem.size - sfx.remove_right).each {|i| tmpbuf << encstem[i] }
@@ -530,8 +696,8 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
     data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
     if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1)
       final_result[aff.alphabet.decode_word(data.encword) +
-                "/" + data.flags.to_a.sort.join +
-                      (stem_is_virtual ? aff.virtual_stem_flag : "")] = true
+        "/" + aff_flags_to_s(data.flags) + (stem_is_virtual ?
+              aff_flags_to_s(aff.virtual_stem_flag) : "")] = true
       data.covers.each {|idx2| todo[idx2] = false }
     end
   end
@@ -559,6 +725,8 @@ end
 ###############################################################################
 
 def test_dic_to_txt(affdata, input, expected_output)
+  affdata = affdata.split('\n').map {|l| l.gsub(/^\s*(.*)?\s*$/, "\\1") }
+                               .join('\n')
   dict = (affdata + input).split("").sort.uniq.join
   output = [""].clear
   AFF.new(affdata, dict, RULESET_TESTSTRING).decode_dic_entry(input) do |word|
@@ -629,6 +797,22 @@ def run_tests
                    SFX B Y 1
                    SFX B екар ыжка лекар", "лекар/ABz",
                    ["лыжка", "шчотка"])
+
+  # Long flags with two characters
+  test_dic_to_txt("FLAG long
+                   PFX Aa Y 1
+                   PFX Aa ааа ба ааа
+                   SFX Bb Y 1
+                   SFX Bb ааа ав ааа", "ааааа/AaBb",
+                   ["ааааа", "ааав", "бааа", "бав"])
+
+  # Numeric flags
+  test_dic_to_txt("FLAG num
+                   PFX 1 Y 1
+                   PFX 1 ааа ба ааа
+                   SFX 2 Y 1
+                   SFX 2 ааа ав ааа", "ааааа/1,2",
+                   ["ааааа", "ааав", "бааа", "бав"])
 end
 
 ###############################################################################
