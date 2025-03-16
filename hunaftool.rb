@@ -6,7 +6,7 @@
 #             and .DIC files for Hunspell, tailoring them for some
 #             already existing .AFF file.
 
-VERSION = 0.5
+VERSION = 0.6
 
 ###############################################################################
 
@@ -252,11 +252,13 @@ end
 
 # That's an affix rule, pretty much in the same format as in .AFF files
 class Rule
-  def initialize(flag = I64_0, stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
+  def initialize(flag = I64_0, flag2 = I64_0, stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
-    @flag, @stripping, @affix, @condition, @rawsrc = flag, stripping, affix, condition, rawsrc
+    @flag2 = {0 => true}.clear if AffFlags.need_hash?
+    @flag, @flag2, @stripping, @affix, @condition, @rawsrc = flag, flag2, stripping, affix, condition, rawsrc
   end
   def flag       ; @flag      end
+  def flag2      ; @flag2     end
   def stripping  ; @stripping end
   def affix      ; @affix     end
   def condition  ; @condition end
@@ -266,12 +268,14 @@ end
 # That's a processed result of matching a rule. It may be adjusted
 # depending on what is the desired result.
 class AffixMatch
-  def initialize(flag = I64_0, remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes, rawsrc = "")
+  def initialize(flag = I64_0, flag2 = I64_0, remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes, rawsrc = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
-    @flag, @remove_left, @append_left, @remove_right, @append_right, @rawsrc =
-      flag, remove_left, append_left, remove_right, append_right, rawsrc
+    @flag2 = {0 => true}.clear if AffFlags.need_hash?
+    @flag, @flag2, @remove_left, @append_left, @remove_right, @append_right, @rawsrc =
+      flag, flag2, remove_left, append_left, remove_right, append_right, rawsrc
   end
   def flag         ; @flag               end
+  def flag2        ; @flag2              end
   def remove_left  ; @remove_left        end
   def append_left  ; @append_left        end
   def remove_right ; @remove_right       end
@@ -321,19 +325,19 @@ class Ruleset
   def add_rule(rule)
     if prefix? && to_stem?
       condition = rule.affix.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
-      match = AffixMatch.new(rule.flag, rule.affix.size, rule.stripping, 0, "".bytes, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, rule.affix.size, rule.stripping, 0, "".bytes, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     elsif prefix? && from_stem?
       condition = rule.stripping.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
-      match = AffixMatch.new(rule.flag, rule.stripping.size, rule.affix, 0, "".bytes, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, rule.stripping.size, rule.affix, 0, "".bytes, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && to_stem?
       condition = (parse_condition(@alphabet, rule.condition) + rule.affix.map {|x| [x]}).reverse
-      match = AffixMatch.new(rule.flag, 0, "".bytes, rule.affix.size, rule.stripping, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, 0, "".bytes, rule.affix.size, rule.stripping, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && from_stem?
       condition = (parse_condition(@alphabet, rule.condition) + rule.stripping.map {|x| [x]}).reverse
-      match = AffixMatch.new(rule.flag, 0, "".bytes, rule.stripping.size, rule.affix, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, 0, "".bytes, rule.stripping.size, rule.affix, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     end
   end
@@ -422,12 +426,18 @@ class AFF
         stripping = ($3 == "0" ? "" : $3)
         affix     = ($4 == "0" ? "" : $4)
         condition = ($5 == "." ? stripping : $5)
-        unless condition =~ /#{stripping}$/
+        unless (type == "S" && condition =~ /#{stripping}$/) ||
+               (type == "P" && condition =~ /^#{stripping}/)
           STDERR.puts "Invalid rule (bad condition): #{l}"
           next
         end
-        condition = condition.gsub(/#{stripping}$/, "")
-        rule = Rule.new(flag.to_aff_flags, @alphabet.encode_word(stripping),
+        condition = (type == "S") ? condition.gsub(/#{stripping}$/, "") :
+                                    condition.gsub(/^#{stripping}/, "")
+        flag2 = (affix =~ /\/(\S+)$/) ? $1 : ""
+        affix = affix.gsub(/\/\S+$/, "")
+        affix = "" if affix == "0"
+        rule = Rule.new(flag.to_aff_flags, flag2.to_aff_flags,
+                        @alphabet.encode_word(stripping),
                         @alphabet.encode_word(affix), condition, l.strip)
         if type == "S"
           @suffixes_from_stem.add_rule(rule)
@@ -442,6 +452,7 @@ class AFF
     # Prepare buffers for reuse without reallocating them
     @tmpbuf  = "".bytes
     @tmpbuf2 = "".bytes
+    @tmpbuf3 = "".bytes
   end
 
   def alphabet           ; @alphabet end
@@ -490,7 +501,9 @@ class AFF
         if aff_flags_intersect?(flags, sfx.flag) && tmpbuf_apply_suffix(word, sfx)
 
           # Handle single suffixes
-          yield @alphabet.decode_word(@tmpbuf)
+          unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
+            yield @alphabet.decode_word(@tmpbuf)
+          end
 
           # And try to also apply prefix after each successful suffix substitution
           prefixes_from_stem.matched_rules(@tmpbuf) do |pfx|
@@ -499,6 +512,30 @@ class AFF
               @tmpbuf2.concat(pfx.append_left)
               (pfx.remove_left ... @tmpbuf.size).each {|i| @tmpbuf2 << @tmpbuf[i] }
               yield @alphabet.decode_word(@tmpbuf2)
+            end
+          end
+
+          # Try second level prefixes if they are available
+          suffixes_from_stem.matched_rules(@tmpbuf) do |sfx2|
+            if aff_flags_intersect?(sfx.flag2, sfx2.flag) && (@tmpbuf.size != sfx2.remove_right || @fullstrip)
+
+              @tmpbuf3.clear
+              (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
+              @tmpbuf3.concat(sfx2.append_right)
+
+              unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
+                yield @alphabet.decode_word(@tmpbuf3)
+              end
+
+              # And try to also apply prefix after two layers of suffix substitution
+              prefixes_from_stem.matched_rules(@tmpbuf3) do |pfx|
+                if (aff_flags_intersect?(flags, pfx.flag) || aff_flags_intersect?(sfx.flag2, pfx.flag)) && (@tmpbuf3.size != pfx.remove_left || @fullstrip)
+                  @tmpbuf2.clear
+                  @tmpbuf2.concat(pfx.append_left)
+                  (pfx.remove_left ... @tmpbuf3.size).each {|i| @tmpbuf2 << @tmpbuf3[i] }
+                  yield @alphabet.decode_word(@tmpbuf2)
+                end
+              end
             end
           end
         end
@@ -813,6 +850,43 @@ def run_tests
                    SFX 2 Y 1
                    SFX 2 ааа ав ааа", "ааааа/1,2",
                    ["ааааа", "ааав", "бааа", "бав"])
+
+  # Two levels of suffixes
+  test_dic_to_txt("SET UTF-8
+                   FULLSTRIP
+                   NEEDAFFIX z
+                   PFX A Y 2
+                   PFX A лыжка сьвіньня лыжка
+                   PFX A лыж шчот лыж
+                   SFX B Y 1
+                   SFX B екар ыжка лекар
+                   SFX C Y 1
+                   SFX C ка 0/ABz ка
+                   PFX X Y 1
+                   PFX X аая бю ааяр
+                   SFX Y Y 1
+                   SFX Y ааа яв/Z ааа
+                   SFX Z Y 1
+                   SFX Z в ргер в", "ааааа/XY",
+                   ["ааааа", "ааяв", "ааяргер", "бюргер"])
+
+  test_dic_to_txt("SET UTF-8
+                   FULLSTRIP
+                   NEEDAFFIX z
+                   PFX A Y 2
+                   PFX A лыжка сьвіньня лыжка
+                   PFX A лыж шчот лыж
+                   SFX B Y 1
+                   SFX B екар ыжка лекар
+                   SFX C Y 1
+                   SFX C ка 0/ABz ка
+                   PFX X Y 1
+                   PFX X аая бю ааяр
+                   SFX Y Y 1
+                   SFX Y ааа яв/Z ааа
+                   SFX Z Y 1
+                   SFX Z в ргер в", "лекарка/C",
+                   ["лекарка", "сьвіньня", "шчотка"])
 end
 
 ###############################################################################
