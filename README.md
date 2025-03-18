@@ -2,7 +2,9 @@
 This tool is primarily designed to assist in developing and maintaining
 dictionaries for [Hunspell](https://github.com/hunspell/hunspell). As
 such, it can be used to validate the correctness of existing
-dictionaries and fintune/optimize '''.dic''' files.
+[dictionaries](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#short example),
+create or optimize [.dic](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#dictionary file)
+files tailored for a specific .aff file.
 
 The end users may be interested in extracting human readable lists of
 words in text format from the affix-compressed Hunspell dictionaries.
@@ -94,7 +96,7 @@ The checked ones are supported by **hunaftool**:
 ## License
 
 This work is dual-licensed under:
-* [MIT](LICENSE) © Siarhei Siamashka
-* [CC-BY-SA-3.0 or later](LICENSE.CC-BY-SA-3.0) © Siarhei Siamashka
+* [CC-BY-SA-3.0 or later](LICENSE) © Siarhei Siamashka
+* [MIT](LICENSE.MIT) © Siarhei Siamashka
 
 You can choose any of these licenses if you use this work.
