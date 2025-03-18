@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 # Copyright © 2025 Siarhei Siamashka
-# SPDX-License-Identifier: CC-BY-SA-4.0 OR MIT
+# SPDX-License-Identifier: MIT OR CC-BY-SA-3.0+
 #
 # hunaftool - automated conversion between plain text word lists
 #             and .DIC files for Hunspell, tailoring them for some
@@ -918,7 +918,7 @@ unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
   puts "hunaftool v#{VERSION} - automated conversion between plain text word lists"
   puts "                 and .DIC files for Hunspell, tailoring them for some"
   puts "                 already existing .AFF file with affixes."
-  puts "Copyright © 2025 Siarhei Siamashka. License: CC BY-SA 4.0 or MIT."
+  puts "Copyright © 2025 Siarhei Siamashka. License: MIT or CC BY-SA 3.0+."
   puts
   puts "Usage: hunaftool [options] <whatever.aff> [input_file] [output_file]"
   puts "Where options can be:"
