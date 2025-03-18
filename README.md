@@ -94,6 +94,7 @@ The checked ones are supported by **hunaftool**:
 ## License
 
 This work is dual-licensed under:
-* [MIT](LICENSE)
-* [CC-BY-SA-3.0](LICENSE.CC-BY-SA-3.0) or later
+* [MIT](LICENSE) © Siarhei Siamashka
+* [CC-BY-SA-3.0 or later](LICENSE.CC-BY-SA-3.0) © Siarhei Siamashka
+
 You can choose any of these licenses if you use this work.
