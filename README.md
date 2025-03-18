@@ -2,8 +2,8 @@
 This tool is primarily designed to assist in developing and maintaining
 dictionaries for [Hunspell](https://github.com/hunspell/hunspell). As
 such, it can be used to validate the correctness of existing
-[dictionaries](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#short example),
-create or optimize [.dic](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#dictionary file)
+[dictionaries](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#short%20example),
+create or optimize [.dic](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#dictionary%20file)
 files tailored for a specific .aff file.
 
 The end users may be interested in extracting human readable lists of
