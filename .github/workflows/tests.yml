@@ -18,7 +18,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: ruby crystal
+          install: mingw-w64-ucrt-x86_64-crystal
 
       - name: Install Ruby and Crystal on Ubuntu
         if: startsWith(matrix.os, 'ubuntu')
