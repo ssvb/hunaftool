@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   test:
-    name: tests
+    name: wtests
     strategy:
       matrix:
         os: [windows-latest]
@@ -19,7 +19,6 @@ jobs:
           update: true
           install: mingw-w64-ucrt-x86_64-crystal mingw-w64-ucrt-x86_64-ruby
 
-      - name: Run tests
       - shell: msys2 {0}
         run: |
           crystal --version

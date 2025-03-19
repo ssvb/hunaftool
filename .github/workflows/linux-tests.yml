@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   test:
-    name: tests
+    name: ltests
     strategy:
       matrix:
         os: [ubuntu-latest]
