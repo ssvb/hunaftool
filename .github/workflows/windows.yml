@@ -1,9 +1,9 @@
-name: windows-tests
+name: windows
 on: [push, pull_request]
 
 jobs:
   test:
-    name: wtests
+    name: tests
     strategy:
       matrix:
         os: [windows-latest]
