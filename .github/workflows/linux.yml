@@ -29,5 +29,5 @@ jobs:
           tar -xzf crystal-1.6.0-1-linux-x86_64-bundled.tar.gz
           crystal-1.6.0-1/bin/crystal --version
           pwd
-          LD_LIBRARY_PATH=./crystal-1.6.0-1/lib/crystal/lib  crystal-1.6.0-1/bin/crystal build --release hunaftool.rb
+          CRYSTAL_LIBRARY_PATH=./crystal-1.6.0-1/lib/crystal/lib  crystal-1.6.0-1/bin/crystal build --release hunaftool.rb
           ./hunaftool
