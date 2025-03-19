@@ -1,0 +1,24 @@
+name: linux-tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Ruby and Crystal
+        run: |
+          sudo apt-get update && sudo apt-get install ruby crystal -y
+
+      - name: Run tests
+        run: |
+          crystal --version
+          crystal build --release hunaftool.rb
+          ./hunaftool
+          ruby hunaftool.rb
