@@ -26,6 +26,6 @@ jobs:
 
       - name: Run tests
         run: |
-          crystal --version
-          crystal build --release hunaftool.rb -o hunaftool.exe
+          mingw-w64-ucrt-x86_64-crystal --version
+          mingw-w64-ucrt-x86_64-crystal build --release hunaftool.rb -o hunaftool.exe
           ./hunaftool.exe
