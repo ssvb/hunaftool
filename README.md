@@ -15,114 +15,43 @@ Replicates the functionality of unmunch tool, minus its numoerous bugs.
 
 ## Compressing a word list into a new dictionary
 
-RBD
+TBD
 
 ## Limitations
 
-###### General
+### General
 
-The tool is Unicode-aware, but it only supports up to 256 unique characters in the whole
+* The Ruby interpreter is slow and the Crystal compiler [isn't readily available](https://crystal-lang.org/reference/1.15/syntax_and_semantics/platform_support.html)
+on every platform.
+* The tool is Unicode-aware, but it only supports up to 256 unique characters in the whole
 dictionary, which makes it not fit for the languages that use hieroglyphs. Internally
 the strings are remapped to a 8-bit representation for reducing memory footprint and
 fast child node lookups in a [Trie data structure](https://en.wikipedia.org/wiki/Trie).
+* Processing some dictionaries may require huge amounts of memory, well beyond what is available on your computer.
 
-###### Hunspell compatibility
+### Hunspell compatibility
 
-The following options are not supported:
+The following options are NOT supported:
 
-*   [ ] `SET encoding` (UTF-8 is implied)
-*   [ ] `COMPLEXPREFIXES`
-*   [ ] `LANG langcode`
-*   [ ] `IGNORE characters`
-*   [ ] `AF number_of_flag_vector_aliases`
+*   `SET encoding` (UTF-8 is implied)
+*   `COMPLEXPREFIXES`
+*   `LANG langcode`
+*   `IGNORE characters`
+*   `AF number_of_flag_vector_aliases`
+*   `WARN flag`
+*   `FORBIDWARN`
+*   `CIRCUMFIX flag`
+*   `FORBIDDENWORD flag`
+*   `KEEPCASE flag`
+*   `LEMMA_PRESENT flag`
+*   `PSEUDOROOT flag`
+*   `SUBSTANDARD flag`
+*   `CHECKSHARPS`
+*   `COMPOUNDRULE`
 
-All compounds related options are also unsupported.
+#### Compounding
 
-## Supported affix options
-
-The checked ones are supported by **hunaftool**:
-
-###### General
-
-*   [ ] `SET encoding` (UTF-8 is implied)
-*   [ ] `FLAG long`
-*   [ ] `COMPLEXPREFIXES`
-*   [ ] `LANG langcode`
-*   [ ] `IGNORE characters`
-*   [ ] `AF number_of_flag_vector_aliases`
-*   [ ] `WARN flag`
-*   [ ] `FORBIDWARN`
-
-###### Suggestion
-
-*   [x] `TRY characters`
-*   [ ] `NOSUGGEST flag`
-*   [ ] `MAXCPDSUGS num`
-*   [ ] `MAXNGRAMSUGS num`
-*   [ ] `MAXDIFF [0-10]`
-*   [ ] `ONLYMAXDIFF`
-*   [ ] `NOSPLITSUGS`
-*   [ ] `SUGSWITHDOTS`
-*   [ ] `REP number_of_replacement_definitions`
-*   [ ] `REP what replacement`
-*   [ ] `MAP number_of_map_definitions`
-*   [ ] `MAP string_of_related_chars_or_parenthesized_character_sequences`
-*   [ ] `PHONE number_of_phone_definitions`
-*   [ ] `PHONE what replacement`
-*   [ ] `WARN flag`
-*   [ ] `FORBIDWARN`
-
-###### Compounding
-
-*   [ ] `BREAK number_of_break_definitions`
-*   [ ] `BREAK character_or_character_sequence`
-*   [ ] `COMPOUNDRULE number_of_compound_definitions`
-*   [ ] `COMPOUNDRULE compound_pattern`
-*   [ ] `COMPOUNDMIN num`
-*   [ ] `COMPOUNDFLAG flag`
-*   [ ] `COMPOUNDBEGIN flag`
-*   [ ] `COMPOUNDLAST flag`
-*   [ ] `COMPOUNDMIDDLE flag`
-*   [ ] `ONLYINCOMPOUND flag`
-*   [ ] `COMPOUNDPERMITFLAG flag`
-*   [ ] `COMPOUNDFORBIDFLAG flag`
-*   [ ] `COMPOUNDMORESUFFIXES`
-*   [ ] `COMPOUNDROOT flag`
-*   [ ] `COMPOUNDWORDMAX number`
-*   [ ] `CHECKCOMPOUNDDUP`
-*   [ ] `CHECKCOMPOUNDREP`
-*   [ ] `CHECKCOMPOUNDCASE`
-*   [ ] `CHECKCOMPOUNDTRIPLE`
-*   [ ] `SIMPLIFIEDTRIPLE`
-*   [ ] `CHECKCOMPOUNDPATTERN number_of_checkcompoundpattern_definitions`
-*   [ ] `CHECKCOMPOUNDPATTERN endchars[/flag] beginchars[/flag] [replacement]`
-*   [ ] `FORCEUCASE flag`
-*   [ ] `COMPOUNDSYLLABLE max_syllable vowels`
-*   [ ] `SYLLABLENUM flags`
-
-###### Affix creation
-
-*   [x] `PFX flag cross_product number`
-*   [x] `PFX flag stripping prefix [condition [morphological_fields…]]`
-*   [x] `SFX flag cross_product number`
-*   [x] `SFX flag stripping suffix [condition [morphological_fields…]]`
-
-###### Other
-
-*   [ ] `CIRCUMFIX flag`
-*   [ ] `FORBIDDENWORD flag`
-*   [ ] `FULLSTRIP`
-*   [ ] `KEEPCASE flag`
-*   [ ] `ICONV number_of_ICONV_definitions`
-*   [ ] `ICONV pattern pattern2`
-*   [ ] `OCONV number_of_OCONV_definitions`
-*   [ ] `OCONV pattern pattern2`
-*   [ ] `LEMMA_PRESENT flag`
-*   [ ] `NEEDAFFIX flag`
-*   [ ] `PSEUDOROOT flag`
-*   [ ] `SUBSTANDARD flag`
-*   [ ] `WORDCHARS characters`
-*   [ ] `CHECKSHARPS`
+Compounding is not supported at all
 
 ## License
 
