@@ -20,8 +20,9 @@ jobs:
           install: mingw-w64-ucrt-x86_64-crystal mingw-w64-ucrt-x86_64-ruby
 
       - name: Run tests
+      - shell: msys2 {0}
         run: |
-          mingw-w64-ucrt-x86_64-crystal --version
-          mingw-w64-ucrt-x86_64-crystal build --release hunaftool.rb -o hunaftool.exe
+          crystal --version
+          crystal build --release hunaftool.rb -o hunaftool.exe
           ./hunaftool.exe
-          mingw-w64-ucrt-x86_64-ruby hunaftool.rb
+          ruby hunaftool.rb
