@@ -9,6 +9,35 @@ file tailored for a specific ```.aff``` file.
 The end users may be interested in extracting human readable lists of
 words in text format from the affix-compressed Hunspell dictionaries.
 
+## Extracting words from a dictionary
+
+Replicates the functionality of unmunch tool, minus its numoerous bugs.
+
+## Compressing a word list into a new dictionary
+
+RBD
+
+## Limitations
+
+###### General
+
+The tool is Unicode-aware, but it only supports up to 256 unique characters in the whole
+dictionary, which makes it not fit for the languages that use hieroglyphs. Internally
+the strings are remapped to a 8-bit representation for reducing memory footprint and
+fast child node lookups in a [Trie data structure](https://en.wikipedia.org/wiki/Trie).
+
+###### Hunspell compatibility
+
+The following options are not supported:
+
+*   [ ] `SET encoding` (UTF-8 is implied)
+*   [ ] `COMPLEXPREFIXES`
+*   [ ] `LANG langcode`
+*   [ ] `IGNORE characters`
+*   [ ] `AF number_of_flag_vector_aliases`
+
+All compounds related options are also unsupported.
+
 ## Supported affix options
 
 The checked ones are supported by **hunaftool**:
@@ -21,6 +50,8 @@ The checked ones are supported by **hunaftool**:
 *   [ ] `LANG langcode`
 *   [ ] `IGNORE characters`
 *   [ ] `AF number_of_flag_vector_aliases`
+*   [ ] `WARN flag`
+*   [ ] `FORBIDWARN`
 
 ###### Suggestion
 
