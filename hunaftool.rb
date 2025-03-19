@@ -57,6 +57,9 @@ I64_0 = (0x3FFFFFFFFFFFFFFF & 0)
 # data structure.
 ###############################################################################
 
+class AlphabetException < Exception
+end
+
 class Alphabet
   def initialize(charlist = "")
     @char_to_idx = {'a' => U8_0}.clear
@@ -76,8 +79,8 @@ class Alphabet
     word.each_char do |ch|
       unless @char_to_idx.has_key?(ch)
         if @finalized
-          raise "Bad character «#{ch}» found while processing «#{word}». " +
-                "Add it to the alphabet via TRY directive in .AFF\n"
+          STDERR.puts "! An unexpected character «#{ch}» encountered while processing «#{word}»."
+          raise AlphabetException.new
         end
         @char_to_idx[ch] = U8_0 + @idx_to_char.size
         @idx_to_char << ch
@@ -91,6 +94,12 @@ class Alphabet
   def decode_word(word)
     word.map {|idx| @idx_to_char[idx] }.join
   end
+end
+
+def alphabet_from_file(filename)
+  used_alphabet = {'A' => true}.clear
+  File.open(filename).each_char {|ch| used_alphabet[ch] = true }
+  return used_alphabet.keys.join
 end
 
 ###############################################################################
@@ -581,8 +590,8 @@ end
 
 ###############################################################################
 
-def convert_dic_to_txt(aff_file, dic_file, delimiter = nil, out_file = nil)
-  aff = AFF.new(aff_file, "")
+def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_file = nil)
+  aff = AFF.new(aff_file, alphabet)
   wordlist = {"" => true}.clear
   stemwordlist = {"" => true}.clear
   firstline = true
@@ -636,6 +645,17 @@ def convert_dic_to_txt(aff_file, dic_file, delimiter = nil, out_file = nil)
   end
 end
 
+def convert_dic_to_txt(aff_file, dic_file, delimiter = nil, out_file = nil)
+  begin
+    try_convert_dic_to_txt("", aff_file, dic_file, delimiter, out_file)
+  rescue AlphabetException
+    STDERR.puts "! Please ensure that the whole alphabet is accounted for in the TRY directive."
+    a1 = alphabet_from_file(aff_file)
+    a2 = alphabet_from_file(dic_file)
+    try_convert_dic_to_txt(a1 + a2, aff_file, dic_file, delimiter, out_file)
+  end
+end
+
 ###############################################################################
 
 class WordData
@@ -654,8 +674,8 @@ end
 
 ###############################################################################
 
-def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
-  aff = AFF.new(aff_file)
+def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
+  aff = AFF.new(aff_file, alphabet)
 
   # Load the text file into memory
   encword_to_idx = {"".bytes => 0}.clear
@@ -789,6 +809,17 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
   else
     puts final_result.size
     final_result.keys.sort.each {|word| puts word }
+  end
+end
+
+def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
+  begin
+    try_convert_txt_to_dic("", aff_file, txt_file, out_file)
+  rescue AlphabetException
+    STDERR.puts "! Please ensure that the whole alphabet is accounted for in the TRY directive."
+    a1 = alphabet_from_file(aff_file)
+    a2 = alphabet_from_file(txt_file)
+    try_convert_txt_to_dic(a1 + a2, aff_file, txt_file, out_file)
   end
 end
 
