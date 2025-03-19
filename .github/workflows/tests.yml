@@ -1,0 +1,31 @@
+name: tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install MSYS with Ruby and Crystal on Windows
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: ruby crystal
+
+      - name: Install Ruby and Crystal on Ubuntu
+        if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install ruby crystal -y
+
+      - name: Run tests
+        run: |
+          crystal --version
+          crystal build --release hunaftool.rb -o hunaftool.exe
+          ./hunaftool.exe
