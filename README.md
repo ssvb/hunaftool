@@ -19,35 +19,30 @@ TBD
 
 ## Limitations
 
-### General
-
 * The Ruby interpreter is slow and the Crystal compiler [isn't readily available](https://crystal-lang.org/reference/1.15/syntax_and_semantics/platform_support.html)
 on every platform.
 * The tool is Unicode-aware, but it only supports up to 256 unique characters in the whole
-dictionary, which makes it not fit for the languages that use hieroglyphs. Internally
+dictionary, which makes it not suitable for the languages that use hieroglyphs. Internally
 the strings are remapped to a 8-bit representation for reducing memory footprint and
 fast child node lookups in a [Trie data structure](https://en.wikipedia.org/wiki/Trie).
+If this happens, the tool will bail out with an error message rather than producing incoddect results.
 * Processing some dictionaries may require huge amounts of memory, well beyond what is available on your computer.
-
-### Hunspell compatibility
-
-The following options are NOT supported:
-
-*   `SET encoding` (UTF-8 is implied)
-*   `COMPLEXPREFIXES`
-*   `LANG langcode`
-*   `IGNORE characters`
-*   `AF number_of_flag_vector_aliases`
-*   `WARN flag`
-*   `FORBIDWARN`
-*   `CIRCUMFIX flag`
-*   `FORBIDDENWORD flag`
-*   `KEEPCASE flag`
-*   `LEMMA_PRESENT flag`
-*   `PSEUDOROOT flag`
-*   `SUBSTANDARD flag`
-*   `CHECKSHARPS`
-*   `COMPOUNDRULE`
+* Hunspell compatibility is limited and the following options are NOT supported:
+**   `SET encoding` (UTF-8 is implied)
+**   `COMPLEXPREFIXES`
+**   `LANG langcode`
+**   `IGNORE characters`
+**   `AF number_of_flag_vector_aliases`
+**   `WARN flag`
+**   `FORBIDWARN`
+**   `CIRCUMFIX flag`
+**   `FORBIDDENWORD flag`
+**   `KEEPCASE flag`
+**   `LEMMA_PRESENT flag`
+**   `PSEUDOROOT flag`
+**   `SUBSTANDARD flag`
+**   `CHECKSHARPS`
+**   `COMPOUNDRULE`
 
 #### Compounding
 
