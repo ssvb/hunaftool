@@ -131,12 +131,36 @@ module AffFlags
     @@flagname_ch_to_bitpos.clear
     @@bitpos_to_flagname.clear
   end
-  def self.flagname_s_to_bitpos ; @@flagname_s_to_bitpos end
-  def self.flagname_ch_to_bitpos ; @@flagname_ch_to_bitpos end
+
+  def self.flagname_to_bitpos(flag, flagfield)
+    if flag.is_a?(String)
+      if (bitpos = @@flagname_s_to_bitpos.fetch(flag, -1)) != -1
+        return bitpos
+      end
+    else
+      if (bitpos = @@flagname_ch_to_bitpos.fetch(flag, -1)) != -1
+        return bitpos
+      end
+    end
+    STDERR.puts "! Invalid flag «#{flag}» is referenced from the flags field «#{flagfield}»."
+    return -1
+  end
+
   def self.bitpos_to_flagname ; @@bitpos_to_flagname end
   def self.need_hash? ; @@bitpos_to_flagname.size >= SWITCH_TO_HASH_THRESHOLD end
 
   def self.register_flag(flagname)
+    if @@mode == UTF8 && flagname.size > 1
+      STDERR.puts "! The flag must be exactly one character, but «#{flagname}» is longer than that."
+      flagname = flagname[0, 1]
+    elsif @@mode == LONG && flagname.size != 2
+      STDERR.puts "! The long flag must be exactly 2 characters, but «#{flagname}» is not compliant."
+      return if flagname.size < 2
+      flagname = flagname[0, 2]
+    elsif @@mode == NUM && (!(flagname =~ /^(\d+)(.*)$/) || !$2.empty? || $1.to_i >= 65510)
+      STDERR.puts "! The num flag must be a decimal number <= 65509, but «#{flagname}» is not compliant."
+      abort "! It's too tricky to emulate this aspect of Hunspell's behaviour. Aborting...\n"
+    end
     return if @@flagname_s_to_bitpos.has_key?(flagname)
     @@flagname_s_to_bitpos[flagname] = @@bitpos_to_flagname.size
     if flagname.size == 1
@@ -149,29 +173,30 @@ end
 class String
   def to_aff_flags
     if AffFlags.need_hash?
-      tmp = {0 => true}.clear
+      tmp = {-1 => true}
       case AffFlags.mode when AffFlags::LONG
-        raise "The flags field '#{self}' must have an even number of characters\n" if size.odd?
-        self.scan(/(..)/) { tmp[AffFlags.flagname_s_to_bitpos[$1]] = true }
+        STDERR.puts "! The flags field «#{self}» must have an even number of characters." if size.odd?
+        self.scan(/(..)/) { tmp[AffFlags.flagname_to_bitpos($1, self)] = true }
       when AffFlags::NUM then
         unless self.strip.empty?
-          self.split(',').each {|chunk| tmp[AffFlags.flagname_s_to_bitpos[chunk.strip]] = true }
+          self.split(',').each {|chunk| tmp[AffFlags.flagname_to_bitpos(chunk.strip, self)] = true }
         end
       else
-        self.each_char {|ch| tmp[AffFlags.flagname_ch_to_bitpos[ch]] = true }
+        self.each_char {|ch| tmp[AffFlags.flagname_to_bitpos(ch, self)] = true }
       end
+      tmp.delete(-1)
       tmp
     else
       tmp = I64_0
       case AffFlags.mode when AffFlags::LONG
-        raise "The flags field '#{self}' must have an even number of characters\n" if size.odd?
-        self.scan(/(..)/) { tmp |= ((I64_0 + 1) << AffFlags.flagname_s_to_bitpos[$1]) }
+        STDERR.puts "! The flags field «#{self}» must have an even number of characters." if size.odd?
+        self.scan(/(..)/) { tmp |= ((I64_0 + 1) << AffFlags.flagname_to_bitpos($1, self)) }
       when AffFlags::NUM then
         unless self.strip.empty?
-          self.split(',').each {|chunk| tmp |= ((I64_0 + 1) << AffFlags.flagname_s_to_bitpos[chunk.strip]) }
+          self.split(',').each {|chunk| tmp |= ((I64_0 + 1) << AffFlags.flagname_to_bitpos(chunk.strip, self)) }
         end
       else
-        self.each_char {|ch| tmp |= ((I64_0 + 1) << AffFlags.flagname_ch_to_bitpos[ch]) }
+        self.each_char {|ch| tmp |= ((I64_0 + 1) << AffFlags.flagname_to_bitpos(ch, self)) }
       end
       tmp
     end
@@ -374,16 +399,26 @@ class AFF
     AffFlags.mode = AffFlags::UTF8
     # The first pass to count the number of flags
     affdata.each_line do |l|
-      if l =~ /^FLAG (\S+)/
-        case $1
+      if l =~ /^(\s*)FLAG\s+(\S*)/
+        unless $1.empty?
+          STDERR.puts "! The FLAG option has suspicious indentation and this makes it inactive."
+          next
+        end
+        case $2
           when "UTF-8" then AffFlags.mode = AffFlags::UTF8
           when "long"  then AffFlags.mode = AffFlags::LONG
           when "num"   then AffFlags.mode = AffFlags::NUM
-          else raise "Unknown FLAG option #{$1}\n" end
+          else
+            STDERR.puts "! Unrecognized FLAG option «#{$2}»."
+          end
       elsif l =~ /^([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/
         AffFlags.register_flag($2)
-      elsif l =~ /^NEEDAFFIX\s+(\S+)$/
-        AffFlags.register_flag(virtual_stem_flag_s = $1)
+      elsif l =~ /^(\s*)NEEDAFFIX\s+(\S+)$/
+        unless $1.empty?
+          STDERR.puts "! The NEEDAFFIX option has suspicious indentation and this makes it inactive."
+          next
+        end
+        AffFlags.register_flag(virtual_stem_flag_s = $2)
       end
     end
 
