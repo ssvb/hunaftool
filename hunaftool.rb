@@ -477,21 +477,54 @@ class AFF
       elsif l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/
         type = $1
         unless flag == $2
-          STDERR.puts "Invalid rule (flag mismatch): #{l}"
-          next
+          STDERR.puts "! Invalid rule (flag mismatch): #{l}"
+          exit 1
         end
           if (cnt -= 1) < 0
-          STDERR.puts "Invalid rule (wrong counter): #{l}"
-          next
+          STDERR.puts "! Invalid rule (wrong counter): #{l}"
+          exit 1
         end
         stripping = ($3 == "0" ? "" : $3)
         affix     = ($4 == "0" ? "" : $4)
         condition = ($5 == "." ? stripping : $5)
+
+        # Check the condition field for sanity.
+        # FIXME: it would be nice to escape regular expressions here
         unless (type == "S" && condition =~ /#{stripping}$/) ||
                (type == "P" && condition =~ /^#{stripping}/)
-          STDERR.puts "Invalid rule (bad condition): #{l}"
-          next
+          STDERR.puts "! Suspicious rule (strange condition field): #{l}"
+          begin
+          if (type == "S" && stripping =~ /#{condition}$/) ||
+             (type == "P" && stripping =~ /^#{condition}/)
+            STDERR.puts "! ... the condition is effectively the same as the stripping field."
+            condition = stripping
+          elsif type == "S" && condition =~ /(.*)((\[[^\]\)\(\[]+\]|[^\[\]]){#{stripping.size}})$/
+            condition_p1 = $1
+            condition_p2 = $2
+            if stripping =~ /#{condition_p2}$/
+              STDERR.puts "! ... the condition is equivalent to «#{condition_p1}#{stripping}»."
+              condition = condition_p1 + stripping
+            else
+              STDERR.puts "! ... the condition is inert."
+              next
+            end
+          elsif type == "P" && condition =~ /^((\[[^\]\)\(\[]+\]|.){#{stripping.size}})(.*)/
+            condition_p1 = $1
+            condition_p2 = $3
+            if stripping =~ /^#{condition_p1}/
+              STDERR.puts "! ... the condition is equivalent to «#{stripping}#{condition_p2}»."
+              condition = stripping + condition_p2
+            else
+              STDERR.puts "! ... the condition is inert."
+              next
+            end
+          else raise "" end
+          rescue
+            STDERR.puts "! ... can't figure it out and give up."
+            exit 1
+          end
         end
+
         condition = (type == "S") ? condition.gsub(/#{stripping}$/, "") :
                                     condition.gsub(/^#{stripping}/, "")
         flag2 = (affix =~ /\/(\S+)$/) ? $1 : ""
