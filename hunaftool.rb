@@ -286,13 +286,16 @@ end
 
 # That's an affix rule, pretty much in the same format as in .AFF files
 class Rule
-  def initialize(flag = I64_0, flag2 = I64_0, stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
+  def initialize(flag = I64_0, flag2 = I64_0, crossproduct = true,
+                 stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
     @flag2 = {0 => true}.clear if AffFlags.need_hash?
-    @flag, @flag2, @stripping, @affix, @condition, @rawsrc = flag, flag2, stripping, affix, condition, rawsrc
+    @flag, @flag2, @crossproduct, @stripping, @affix, @condition, @rawsrc =
+      flag, flag2, crossproduct, stripping, affix, condition, rawsrc
   end
   def flag       ; @flag      end
   def flag2      ; @flag2     end
+  def cross      ; @crossproduct end
   def stripping  ; @stripping end
   def affix      ; @affix     end
   def condition  ; @condition end
@@ -302,14 +305,17 @@ end
 # That's a processed result of matching a rule. It may be adjusted
 # depending on what is the desired result.
 class AffixMatch
-  def initialize(flag = I64_0, flag2 = I64_0, remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes, rawsrc = "")
+  def initialize(flag = I64_0, flag2 = I64_0, crossproduct = true,
+                 remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes,
+                 rawsrc = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
     @flag2 = {0 => true}.clear if AffFlags.need_hash?
-    @flag, @flag2, @remove_left, @append_left, @remove_right, @append_right, @rawsrc =
-      flag, flag2, remove_left, append_left, remove_right, append_right, rawsrc
+    @flag, @flag2, @crossproduct, @remove_left, @append_left, @remove_right, @append_right, @rawsrc =
+      flag, flag2, crossproduct, remove_left, append_left, remove_right, append_right, rawsrc
   end
   def flag         ; @flag               end
   def flag2        ; @flag2              end
+  def cross        ; @crossproduct       end
   def remove_left  ; @remove_left        end
   def append_left  ; @append_left        end
   def remove_right ; @remove_right       end
@@ -359,19 +365,23 @@ class Ruleset
   def add_rule(rule)
     if prefix? && to_stem?
       condition = rule.affix.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
-      match = AffixMatch.new(rule.flag, rule.flag2, rule.affix.size, rule.stripping, 0, "".bytes, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
+                             rule.affix.size, rule.stripping, 0, "".bytes, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     elsif prefix? && from_stem?
       condition = rule.stripping.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
-      match = AffixMatch.new(rule.flag, rule.flag2, rule.stripping.size, rule.affix, 0, "".bytes, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
+                             rule.stripping.size, rule.affix, 0, "".bytes, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && to_stem?
       condition = (parse_condition(@alphabet, rule.condition) + rule.affix.map {|x| [x]}).reverse
-      match = AffixMatch.new(rule.flag, rule.flag2, 0, "".bytes, rule.affix.size, rule.stripping, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
+                             0, "".bytes, rule.affix.size, rule.stripping, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && from_stem?
       condition = (parse_condition(@alphabet, rule.condition) + rule.stripping.map {|x| [x]}).reverse
-      match = AffixMatch.new(rule.flag, rule.flag2, 0, "".bytes, rule.stripping.size, rule.affix, rule.rawsrc)
+      match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
+                             0, "".bytes, rule.stripping.size, rule.affix, rule.rawsrc)
       add_rule_imp(self, match, condition, 0)
     end
   end
@@ -442,6 +452,7 @@ class AFF
     @virtual_stem_flag = virtual_stem_flag_s.to_aff_flags
     flag = ""
     cnt = 0
+    crossproduct = false
     affdata.each_line do |l|
       if l =~ /^\s*TRY\s+(\S+)(.*)$/
         @alphabet.encode_word($1)
@@ -452,10 +463,16 @@ class AFF
       elsif l =~ /^(\s*)FULLSTRIP\s*(\s+.*)?$/
         raise "Malformed FULLSTRIP directive (indented).\n" unless $1 == ""
         @fullstrip = true
-      elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+Y\s+(\d+)\s*(.*)$/
+      elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\d+)\s*(.*)$/
         type = $1
         flag = $2
-        cnt = $3.to_i
+        case $3 when "Y" then crossproduct = true
+                when "N" then crossproduct = false
+        else
+          STDERR.puts "! Hunspell interprets the cross product field «#{$3}» as N."
+          crossproduct = false
+        end
+        cnt = $4.to_i
         @alphabet.finalized_size
       elsif l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/
         type = $1
@@ -480,7 +497,7 @@ class AFF
         flag2 = (affix =~ /\/(\S+)$/) ? $1 : ""
         affix = affix.gsub(/\/\S+$/, "")
         affix = "" if affix == "0"
-        rule = Rule.new(flag.to_aff_flags, flag2.to_aff_flags,
+        rule = Rule.new(flag.to_aff_flags, flag2.to_aff_flags, crossproduct,
                         @alphabet.encode_word(stripping),
                         @alphabet.encode_word(affix), condition, l.strip)
         if type == "S"
@@ -530,27 +547,27 @@ class AFF
       word = @alphabet.encode_word((stem_field || "").strip)
       flags = (flags_field || "").to_aff_flags
 
-      unless aff_flags_intersect?(flags, @virtual_stem_flag)
-        yield @alphabet.decode_word(word)
-      end
+      # The stem itself is a word, unless it's a virtual stem (NEEDAFFIX flag)
+      yield @alphabet.decode_word(word) unless aff_flags_intersect?(flags, @virtual_stem_flag)
 
+      # Handle single prefixes without considering any suffixes
       prefixes_from_stem.matched_rules(word) do |pfx|
-        # Handle single prefixes without any suffix
         if aff_flags_intersect?(flags, pfx.flag) && tmpbuf_apply_prefix(word, pfx)
           yield @alphabet.decode_word(@tmpbuf)
         end
       end
 
+      # Start processing all possible suffixes
       suffixes_from_stem.matched_rules(word) do |sfx|
         if aff_flags_intersect?(flags, sfx.flag) && tmpbuf_apply_suffix(word, sfx)
+          # Handle single suffixes without considering any prefixes or additional suffixes.
+          # The suffix itself may have the NEEDAFFIX flag attached to it, which means that
+          # it's not a real word without a second suffix.
+          yield @alphabet.decode_word(@tmpbuf) unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
 
-          # Handle single suffixes
-          unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
-            yield @alphabet.decode_word(@tmpbuf)
-          end
-
-          # And try to also apply prefix after each successful suffix substitution
+          # Handle combinations of a single suffix and a single prefix
           prefixes_from_stem.matched_rules(@tmpbuf) do |pfx|
+            next unless pfx.cross && sfx.cross
             if aff_flags_intersect?(flags, pfx.flag) && (@tmpbuf.size != pfx.remove_left || @fullstrip)
               @tmpbuf2.clear
               @tmpbuf2.concat(pfx.append_left)
@@ -559,20 +576,17 @@ class AFF
             end
           end
 
-          # Try second level prefixes if they are available
+          # Handle combinations of two suffixes
           suffixes_from_stem.matched_rules(@tmpbuf) do |sfx2|
             if aff_flags_intersect?(sfx.flag2, sfx2.flag) && (@tmpbuf.size != sfx2.remove_right || @fullstrip)
-
               @tmpbuf3.clear
               (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
               @tmpbuf3.concat(sfx2.append_right)
+              yield @alphabet.decode_word(@tmpbuf3)
 
-              unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
-                yield @alphabet.decode_word(@tmpbuf3)
-              end
-
-              # And try to also apply prefix after two layers of suffix substitution
+              # Handle a possible prefix on top of two suffixes
               prefixes_from_stem.matched_rules(@tmpbuf3) do |pfx|
+                next unless pfx.cross && sfx.cross && sfx2.cross
                 if (aff_flags_intersect?(flags, pfx.flag) || aff_flags_intersect?(sfx.flag2, pfx.flag)) && (@tmpbuf3.size != pfx.remove_left || @fullstrip)
                   @tmpbuf2.clear
                   @tmpbuf2.concat(pfx.append_left)
@@ -952,7 +966,7 @@ def run_tests
                    SFX Y ааа яв/Z ааа
                    SFX Z Y 1
                    SFX Z в ргер в", "лекарка/C",
-                   ["лекарка", "сьвіньня", "шчотка"])
+                   ["лекарка", "лыжка", "сьвіньня", "шчотка"])
 end
 
 ###############################################################################
