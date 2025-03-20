@@ -6,7 +6,7 @@
 #             and .DIC files for Hunspell, tailoring them for some
 #             already existing .AFF file.
 
-VERSION = 0.6
+VERSION = 0.7
 
 ###############################################################################
 
@@ -994,7 +994,7 @@ args = ARGV.select do |arg|
   end
 end
 
-unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
+unless args.size >= 1 && args[0] =~ /\.aff$/i
   puts "hunaftool v#{VERSION} - automated conversion between plain text word lists"
   puts "                 and .DIC files for Hunspell, tailoring them for some"
   puts "                 already existing .AFF file with affixes."
