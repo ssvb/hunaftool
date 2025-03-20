@@ -1,0 +1,20 @@
+SET UTF-8
+TRY abcdefgxy
+FLAG long
+NEEDAFFIX ~~
+SFX Ab Y 1
+SFX Ab 0 b a
+SFX Ac Y 1
+SFX Ac 0 c/Ac [ac]
+SFX Ad Y 1
+SFX Ad 0 d/~~ [ad]
+SFX Ae Y 1
+SFX Ae 0 e/EfEg a
+SFX Ef Y 1
+SFX Ef 0 f e
+SFX Eg Y 1
+SFX Eg 0 g e
+SFX Xa Y 1
+SFX Xa 0 a/AbAcAdAe x
+SFX Ya Y 1
+SFX Ya 0 a/AbAcAdAe~~ y

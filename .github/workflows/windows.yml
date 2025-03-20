@@ -1,0 +1,28 @@
+name: windows
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: tests
+    strategy:
+      matrix:
+        os: [windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install MSYS with Ruby and Crystal on Windows
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-crystal mingw-w64-ucrt-x86_64-ruby
+
+      - shell: msys2 {0}
+        run: |
+          crystal --version
+          crystal build --release hunaftool.rb -o hunaftool.exe
+          ./hunaftool.exe
+          ruby run-hunaftool-tests.rb ./hunaftool.exe tests
+          ruby run-hunaftool-tests.rb "ruby hunaftool.rb" tests

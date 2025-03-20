@@ -1,0 +1,18 @@
+SET UTF-8
+TRY анісырлеокятдувзмпцўбгґчьшхйэжюёАНПЯІСКТВМДЗГҐУЛБфШЁХРЧЦЮЖОФЎЭЕЫЙЬ
+FULLSTRIP
+NEEDAFFIX z
+PFX A Y 2
+PFX A лыжка сьвіньня лыжка
+PFX A лыж шчот лыж
+SFX B N 1
+SFX B екар ыжка лекар
+SFX C N 1
+SFX C ка 0/ABz ка
+PFX X N 2
+PFX X аая бю ааяр
+PFX X ааа ба ааа
+SFX Y Y 1
+SFX Y ааа яв/Z ааа
+SFX Z N 1
+SFX Z в ргер в
