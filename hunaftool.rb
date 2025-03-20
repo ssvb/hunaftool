@@ -47,7 +47,7 @@ COMPILED_BY_CRYSTAL = (((1 / 2) * 2) != 0)
 U8_0 = "\0".bytes.first
 
 # A 64-bit zero constant to hint the use of Int64 instead of Int32 for Crystal
-I64_0 = (0x3FFFFFFFFFFFFFFF & 0)
+I64_0 = 0_i128
 
 ###############################################################################
 # Remap UTF-8 words to indexable 8-bit arrays for performance reasons. All
@@ -126,7 +126,7 @@ module AffFlags
   LONG                      = 2    # "FLAG long" option in the affix file
   NUM                       = 3    # "FLAG num" option in the affix file
 
-  SWITCH_TO_HASH_THRESHOLD  = 63
+  SWITCH_TO_HASH_THRESHOLD  = 129
 
   @@mode                  = UTF8
   @@flagname_s_to_bitpos  = {"A" => 0}.clear

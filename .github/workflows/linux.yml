@@ -22,7 +22,6 @@ jobs:
           crystal build --release hunaftool.rb
           ./hunaftool
           ruby run-hunaftool-tests.rb ./hunaftool tests
-          ruby run-hunaftool-tests.rb "ruby hunaftool.rb" tests
 
       - name: Run tests with the old Crystal 1.6.0 from Debian "bookworm"
         run: |

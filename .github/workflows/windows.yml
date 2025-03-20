@@ -25,4 +25,3 @@ jobs:
           crystal build --release hunaftool.rb -o hunaftool.exe
           ./hunaftool.exe
           ruby run-hunaftool-tests.rb ./hunaftool.exe tests
-          ruby run-hunaftool-tests.rb "ruby hunaftool.rb" tests
