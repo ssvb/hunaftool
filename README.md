@@ -1,14 +1,11 @@
 # Hunaftool [![linux](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml) [![windows](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml)
 
-This tool is primarily designed to assist in developing and maintaining
-dictionaries for [Hunspell](https://github.com/hunspell/hunspell).
-It can be used to validate correctness of the existing
-[dictionaries](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#short%20example).
-But more importantly, it can automatically create a [.dic](https://manpages.ubuntu.com/manpages/xenial/man5/hunspell.5.html#dictionary%20file)
-file tailored for a specific `.aff` file.
+This tool is primarily designed to assist in the development and maintenance of
+[Hunspell](https://github.com/hunspell/hunspell) dictionaries.
+It can be used to validate correctness of the existing dictionaries.
+But more importantly, it can automatically create a `.dic` file tailored for a specific `.aff` file.
 
-The end users may be interested in extracting human readable lists of
-words in text format from the affix-compressed Hunspell dictionaries.
+End users may be interested in extracting human-readable lists of words in text format from the affix-compressed Hunspell dictionaries.
 
 ## Usage
 
