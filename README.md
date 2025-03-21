@@ -10,15 +10,15 @@ file tailored for a specific `.aff` file.
 The end users may be interested in extracting human readable lists of
 words in text format from the affix-compressed Hunspell dictionaries.
 
-## Dependencies
+## Usage
 
-Ruby interpreter (https://www.ruby-lang.org) or Crystal compiler (https://crystal-lang.org).
+The tool requires Ruby interpreter (https://www.ruby-lang.org) or Crystal compiler (https://crystal-lang.org).
 
-## Extracting words from a dictionary
+### Extracting words from a dictionary
 
 Replicates the functionality of `unmunch` tool, minus its bugs and limitations.
 
-## Compressing a word list into a dictionary
+### Compressing a word list into a dictionary
 
 Replicates the functionality of `munch` tool, minus its bugs and limitations.
 
