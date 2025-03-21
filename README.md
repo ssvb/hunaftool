@@ -89,5 +89,4 @@ If this happens, the tool will bail out with an error message rather than silent
 ## License
 
 Hunaftool is dual-licensed under [MIT](LICENSE.MIT) OR [CC-BY-SA-3.0 or later](LICENSE.CC-BY-SA).
-
-You may select, at your option, one of the above-listed licenses if you use this work.
+You may select, at your option, one of these licenses if you use this work.
