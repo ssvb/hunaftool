@@ -88,8 +88,4 @@ If this happens, the tool will bail out with an error message rather than silent
 
 ## License
 
-This work is dual-licensed under:
-* [MIT](LICENSE.MIT) © Siarhei Siamashka
-* [CC-BY-SA-3.0 or later](LICENSE.CC-BY-SA) © Siarhei Siamashka
-
-You can choose any of these licenses if you use this work.
+This work is dual-licensed under* [MIT](LICENSE.MIT) and [CC-BY-SA-3.0 or later](LICENSE.CC-BY-SA). You can choose any of these licenses if you use this work.
