@@ -719,16 +719,22 @@ end
 
 class WordData
   def initialize(encword = "".bytes)
-    @encword  = encword
-    @flags    = AffFlags.need_hash? ? {0 => true}.clear : I64_0
-    @covers   = [0].to_set.clear
+    @encword    = encword
+    @pfx_flags  = AffFlags.need_hash? ? {0 => true}.clear : I64_0
+    @sfx_flags  = AffFlags.need_hash? ? {0 => true}.clear : I64_0
+    @pfx_covers = [0].to_set.clear
+    @sfx_covers = [0].to_set.clear
   end
 
-  def encword             ; @encword end
-  def flags               ; @flags end
-  def covers              ; @covers end
-  def flags_merge(flags)  ; @flags = aff_flags_merge!(@flags, flags) end
-  def flags_delete(flags) ; @flags = aff_flags_delete!(@flags, flags) end
+  def encword                 ; @encword end
+  def pfx_flags               ; @pfx_flags end
+  def sfx_flags               ; @sfx_flags end
+  def pfx_covers              ; @pfx_covers end
+  def sfx_covers              ; @sfx_covers end
+  def pfx_flags_merge(flags)  ; @pfx_flags = aff_flags_merge!(@pfx_flags, flags) end
+  def pfx_flags_delete(flags) ; @pfx_flags = aff_flags_delete!(@pfx_flags, flags) end
+  def sfx_flags_merge(flags)  ; @sfx_flags = aff_flags_merge!(@sfx_flags, flags) end
+  def sfx_flags_delete(flags) ; @sfx_flags = aff_flags_delete!(@sfx_flags, flags) end
 end
 
 ###############################################################################
@@ -753,13 +759,16 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   # have normal words below this index, and virtual stems at it and above
   virtual_stem_area_begin = idx_to_data.size
 
-  tmpbuf = "".bytes
+  tmpbuf  = "".bytes
+  tmpbuf2 = "".bytes
 
   # Going from words to all possible stems (including the virtual stems that
   # aren't proper words themselves), find the preliminary sets of flags that
   # can be potentially used to construct such words.
   (0 ... virtual_stem_area_begin).each do |idx|
     encword = idx_to_data[idx].encword
+
+    # a single suffix
     aff.suffixes_to_stem.matched_rules(encword) do |sfx|
       next if encword.size == sfx.remove_right && !aff.fullstrip?
 
@@ -768,35 +777,108 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
       tmpbuf.concat(sfx.append_right)
 
       if (stem_idx = encword_to_idx.fetch(tmpbuf, -1)) != -1
-        idx_to_data[stem_idx].flags_merge(sfx.flag)
+        idx_to_data[stem_idx].sfx_flags_merge(sfx.flag)
+        idx_to_data[stem_idx].pfx_flags_merge(sfx.flag)
       elsif !aff_flags_empty?(aff.virtual_stem_flag)
-        tmpbuf2 = tmpbuf.dup
+        tmpbuf_dup = tmpbuf.dup
         stem_idx = idx_to_data.size
-        encword_to_idx[tmpbuf2] = idx_to_data.size
-        data = WordData.new(tmpbuf2)
-        data.flags_merge(sfx.flag)
+        encword_to_idx[tmpbuf_dup] = idx_to_data.size
+        data = WordData.new(tmpbuf_dup)
+        data.sfx_flags_merge(sfx.flag)
+        data.pfx_flags_merge(sfx.flag)
         idx_to_data.push(data)
+      end
+    end
+
+    # a prefix
+    aff.prefixes_to_stem.matched_rules(encword) do |pfx|
+      next if encword.size == pfx.remove_left && !aff.fullstrip?
+
+      tmpbuf.clear
+      tmpbuf.concat(pfx.append_left)
+      (pfx.remove_left ... encword.size).each {|i| tmpbuf << encword[i] }
+
+      # a single prefix
+      if (stem_idx = encword_to_idx.fetch(tmpbuf, -1)) != -1
+        idx_to_data[stem_idx].pfx_flags_merge(pfx.flag)
+        idx_to_data[stem_idx].sfx_flags_merge(pfx.flag)
+      elsif !aff_flags_empty?(aff.virtual_stem_flag)
+        tmpbuf_dup = tmpbuf.dup
+        stem_idx = idx_to_data.size
+        encword_to_idx[tmpbuf_dup] = idx_to_data.size
+        data = WordData.new(tmpbuf_dup)
+        data.pfx_flags_merge(pfx.flag)
+        data.sfx_flags_merge(pfx.flag)
+        idx_to_data.push(data)
+      end
+
+      # a suffix on top of a prefix
+      aff.suffixes_to_stem.matched_rules(tmpbuf) do |sfx|
+        next if tmpbuf.size == sfx.remove_right && !aff.fullstrip?
+        next unless pfx.cross && sfx.cross
+
+        tmpbuf2.clear
+        (0 ... encword.size - sfx.remove_right).each {|i| tmpbuf2 << encword[i] }
+        tmpbuf2.concat(sfx.append_right)
+
+        if (stem_idx = encword_to_idx.fetch(tmpbuf2, -1)) != -1
+          idx_to_data[stem_idx].sfx_flags_merge(sfx.flag)
+          idx_to_data[stem_idx].sfx_flags_merge(pfx.flag)
+          idx_to_data[stem_idx].pfx_flags_merge(sfx.flag)
+          idx_to_data[stem_idx].pfx_flags_merge(pfx.flag)
+
+        elsif !aff_flags_empty?(aff.virtual_stem_flag)
+          tmpbuf_dup = tmpbuf2.dup
+          stem_idx = idx_to_data.size
+          encword_to_idx[tmpbuf_dup] = idx_to_data.size
+          data = WordData.new(tmpbuf_dup)
+          data.sfx_flags_merge(sfx.flag)
+          data.sfx_flags_merge(pfx.flag)
+          data.pfx_flags_merge(sfx.flag)
+          data.pfx_flags_merge(pfx.flag)
+          idx_to_data.push(data)
+        end
       end
     end
   end
 
   idx_to_data.each_with_index do |data, idx|
     # Nothing to do for the entries that have no flags to begin with
-    next if aff_flags_empty?(data.flags)
+#    next if aff_flags_empty?(data.flags)
 
     # Going from stems to the wordforms that they produce, identify and
     # remove all invalid flags
-    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+    aff.expand_stem(data.encword, data.pfx_flags) do |wordform, pfx_flag, sfx_flag|
       if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
-        data.flags_delete(sfx_flag) if sfx_flag
+        data.pfx_flags_delete(pfx_flag) if pfx_flag && !sfx_flag
+      end
+    end
+    aff.expand_stem(data.encword, data.pfx_flags) do |wordform, pfx_flag, sfx_flag|
+      if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+        data.pfx_flags_delete(sfx_flag) if sfx_flag && pfx_flag
+      end
+    end
+    aff.expand_stem(data.encword, data.sfx_flags) do |wordform, pfx_flag, sfx_flag|
+      if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+        data.sfx_flags_delete(sfx_flag) if sfx_flag && !pfx_flag
+      end
+    end
+    aff.expand_stem(data.encword, data.sfx_flags) do |wordform, pfx_flag, sfx_flag|
+      if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+        data.sfx_flags_delete(pfx_flag) if sfx_flag && pfx_flag
       end
     end
 
     # Now that all flags are valid, retrive the full list of words that can
     # be generated from this stem
-    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+    aff.expand_stem(data.encword, data.pfx_flags) do |wordform, pfx_flag, sfx_flag|
       if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
-        data.covers.add(tmpidx)
+        data.pfx_covers.add(tmpidx)
+      end
+    end
+    aff.expand_stem(data.encword, data.sfx_flags) do |wordform, pfx_flag, sfx_flag|
+      if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
+        data.sfx_covers.add(tmpidx)
       end
     end
   end
@@ -804,15 +886,14 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   # Greedily select those stems, which cover more words. In case of a tie, select the
   # shorter one
   order = idx_to_data.size.times.to_a.sort do |idx1, idx2|
-    if idx_to_data[idx2].covers.size == idx_to_data[idx1].covers.size
+    if idx_to_data[idx2].sfx_covers.size == idx_to_data[idx1].sfx_covers.size
       if idx_to_data[idx1].encword.size == idx_to_data[idx2].encword.size
-        # Fallback to the alphabetic sort
         idx_to_data[idx1].encword <=> idx_to_data[idx2].encword
       else
         idx_to_data[idx1].encword.size <=> idx_to_data[idx2].encword.size
       end
     else
-      idx_to_data[idx2].covers.size <=> idx_to_data[idx1].covers.size
+      idx_to_data[idx2].sfx_covers.size <=> idx_to_data[idx1].sfx_covers.size
     end
   end
 
@@ -824,12 +905,12 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     stem_is_virtual = (idx >= virtual_stem_area_begin)
     data = idx_to_data[idx]
     effectivelycovers = 0
-    data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
+    data.sfx_covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
     if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1)
       final_result[aff.alphabet.decode_word(data.encword) +
-        "/" + aff_flags_to_s(data.flags) + (stem_is_virtual ?
+        "/" + aff_flags_to_s(data.sfx_flags) + (stem_is_virtual ?
               aff_flags_to_s(aff.virtual_stem_flag) : "")] = true
-      data.covers.each {|idx2| todo[idx2] = false }
+      data.sfx_covers.each {|idx2| todo[idx2] = false }
     end
   end
 
