@@ -48,7 +48,7 @@ If this happens, the tool will bail out with an error message rather than produc
 ## License
 
 This work is dual-licensed under:
-* [CC-BY-SA-3.0 or later](LICENSE) © Siarhei Siamashka
+* [CC-BY-SA-3.0+](LICENSE.CC-BY-SA) © Siarhei Siamashka
 * [MIT](LICENSE.MIT) © Siarhei Siamashka
 
 You can choose any of these licenses if you use this work.
