@@ -756,7 +756,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   tmpbuf = "".bytes
 
   # Going from words to all possible stems (including the virtual stems that
-  # aren't proper words themselves), find the prelimitary sets of flags that
+  # aren't proper words themselves), find the preliminary sets of flags that
   # can be potentially used to construct such words.
   (0 ... virtual_stem_area_begin).each do |idx|
     encword = idx_to_data[idx].encword
@@ -780,42 +780,22 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     end
   end
 
-  # Going from stems to the affixed words that they produce, identify and
-  # remove all invalid flags
   idx_to_data.each_with_index do |data, idx|
+    # Nothing to do for the entries that have no flags to begin with
     next if aff_flags_empty?(data.flags)
-    encstem = data.encword
-    aff.suffixes_from_stem.matched_rules(encstem) do |sfx|
-      next if encstem.size == sfx.remove_right && !aff.fullstrip?
-      next unless aff_flags_intersect?(data.flags, sfx.flag)
 
-      tmpbuf.clear
-      (0 ... encstem.size - sfx.remove_right).each {|i| tmpbuf << encstem[i] }
-      tmpbuf.concat(sfx.append_right)
-
-      if encword_to_idx.fetch(tmpbuf, virtual_stem_area_begin) >= virtual_stem_area_begin
-        data.flags_delete(sfx.flag)
+    # Going from stems to the wordforms that they produce, identify and
+    # remove all invalid flags
+    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+      if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+        data.flags_delete(sfx_flag) if sfx_flag
       end
     end
-  end
 
-  # Now that all flags are valid, retrive the full list of words that can
-  # be generated from this stem
-  idx_to_data.each_with_index do |data, idx|
-    next if aff_flags_empty?(data.flags)
-    encstem = data.encword
-
-    data.covers.add(idx) unless idx >= virtual_stem_area_begin
-
-    aff.suffixes_from_stem.matched_rules(encstem) do |sfx|
-      next if encstem.size == sfx.remove_right && !aff.fullstrip?
-      next unless aff_flags_intersect?(data.flags, sfx.flag)
-
-      tmpbuf.clear
-      (0 ... encstem.size - sfx.remove_right).each {|i| tmpbuf << encstem[i] }
-      tmpbuf.concat(sfx.append_right)
-
-      if (tmpidx = encword_to_idx.fetch(tmpbuf, virtual_stem_area_begin)) < virtual_stem_area_begin
+    # Now that all flags are valid, retrive the full list of words that can
+    # be generated from this stem
+    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+      if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
         data.covers.add(tmpidx)
       end
     end
