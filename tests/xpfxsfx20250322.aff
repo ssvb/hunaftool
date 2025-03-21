@@ -1,0 +1,6 @@
+SET UTF-8
+TRY acedhrxyit
+PFX A Y 1
+PFX A 0 r     [ae]
+SFX B Y 1
+SFX B 0 it/A  d
