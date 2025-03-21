@@ -10,6 +10,10 @@ file tailored for a specific `.aff` file.
 The end users may be interested in extracting human readable lists of
 words in text format from the affix-compressed Hunspell dictionaries.
 
+## Dependencies
+
+Ruby interpreter (https://www.ruby-lang.org) or Crystal compiler (https://crystal-lang.org).
+
 ## Extracting words from a dictionary
 
 Replicates the functionality of `unmunch` tool, minus its bugs and limitations.
@@ -26,7 +30,7 @@ on every platform (Windows is a 3rd tier platform with limited support).
 dictionary, which makes it not suitable for the languages that use hieroglyphs. Internally
 the strings are remapped to a 8-bit representation for reducing memory footprint and
 fast child node lookups in a [Trie data structure](https://en.wikipedia.org/wiki/Trie).
-If this happens, the tool will bail out with an error message rather than producing incoddect results.
+If this happens, the tool will bail out with an error message rather than silently producing incorrect results.
 * Processing some dictionaries may require huge amounts of memory, well beyond what is available on your computer.
 * Hunspell compatibility is limited and the following options are NOT supported:
 `SET encoding`,
