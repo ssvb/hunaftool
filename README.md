@@ -1,4 +1,5 @@
-# hunaftool
+# Hunaftool [![linux](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml) [![linux](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml)
+
 This tool is primarily designed to assist in developing and maintaining
 dictionaries for [Hunspell](https://github.com/hunspell/hunspell).
 It can be used to validate correctness of the existing
