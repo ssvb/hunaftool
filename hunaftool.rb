@@ -573,63 +573,75 @@ class AFF
     true
   end
 
-  # decode a single line from a .DIC file
+  # Find all wordforms produced by a stem with a specified set of flags.
+  # Each of the matched wordforms is yielded to a block along with the
+  # prefix flags and the suffix flags that resulted in this match.
+  #
+  # Note: the yilded wordform is in 8-bit encoding and references to the
+  #       internal temporary buffer, which is going to be overwritten!
+  #       If this wordform needs to be stored somewhere, then a copy
+  #       needs to be allocated via .dup method.
+  def expand_stem(stem, flags)
+    # The stem itself is a wordform, unless it's a virtual stem (NEEDAFFIX flag)
+    yield stem, nil, nil unless aff_flags_intersect?(flags, @virtual_stem_flag)
+
+    # Handle single prefixes without considering any suffixes
+    prefixes_from_stem.matched_rules(stem) do |pfx|
+      if aff_flags_intersect?(flags, pfx.flag) && tmpbuf_apply_prefix(stem, pfx)
+        yield @tmpbuf, pfx.flag, nil
+      end
+    end
+
+    # Start processing all possible suffixes
+    suffixes_from_stem.matched_rules(stem) do |sfx|
+      if aff_flags_intersect?(flags, sfx.flag) && tmpbuf_apply_suffix(stem, sfx)
+        # Handle single suffixes without considering any prefixes or additional suffixes.
+        # The suffix itself may have the NEEDAFFIX flag attached to it, which means that
+        # it's not a real word without a second suffix.
+        yield @tmpbuf, nil, sfx.flag unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
+
+        # Handle combinations of a single suffix and a single prefix
+        prefixes_from_stem.matched_rules(@tmpbuf) do |pfx|
+        next unless pfx.cross && sfx.cross
+          if aff_flags_intersect?(flags, pfx.flag) && (@tmpbuf.size != pfx.remove_left || @fullstrip)
+            @tmpbuf2.clear
+            @tmpbuf2.concat(pfx.append_left)
+            (pfx.remove_left ... @tmpbuf.size).each {|i| @tmpbuf2 << @tmpbuf[i] }
+            yield @tmpbuf2, pfx.flag, sfx.flag
+          end
+        end
+
+        # Handle combinations of two suffixes
+        suffixes_from_stem.matched_rules(@tmpbuf) do |sfx2|
+          if aff_flags_intersect?(sfx.flag2, sfx2.flag) && (@tmpbuf.size != sfx2.remove_right || @fullstrip)
+            @tmpbuf3.clear
+            (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
+            @tmpbuf3.concat(sfx2.append_right)
+            yield @tmpbuf3, nil, sfx.flag
+
+            # Handle a possible prefix on top of two suffixes
+            prefixes_from_stem.matched_rules(@tmpbuf3) do |pfx|
+              next unless pfx.cross && sfx.cross && sfx2.cross
+              if (aff_flags_intersect?(flags, pfx.flag) || aff_flags_intersect?(sfx.flag2, pfx.flag)) && (@tmpbuf3.size != pfx.remove_left || @fullstrip)
+                @tmpbuf2.clear
+                @tmpbuf2.concat(pfx.append_left)
+                (pfx.remove_left ... @tmpbuf3.size).each {|i| @tmpbuf2 << @tmpbuf3[i] }
+                yield @tmpbuf2, pfx.flag, sfx.flag
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
   def decode_dic_entry(line)
     if line =~ /^([^\/]+)\/?(\S*)/
       stem_field, flags_field = $~.captures
       word = @alphabet.encode_word((stem_field || "").strip)
       flags = (flags_field || "").to_aff_flags
-
-      # The stem itself is a word, unless it's a virtual stem (NEEDAFFIX flag)
-      yield @alphabet.decode_word(word) unless aff_flags_intersect?(flags, @virtual_stem_flag)
-
-      # Handle single prefixes without considering any suffixes
-      prefixes_from_stem.matched_rules(word) do |pfx|
-        if aff_flags_intersect?(flags, pfx.flag) && tmpbuf_apply_prefix(word, pfx)
-          yield @alphabet.decode_word(@tmpbuf)
-        end
-      end
-
-      # Start processing all possible suffixes
-      suffixes_from_stem.matched_rules(word) do |sfx|
-        if aff_flags_intersect?(flags, sfx.flag) && tmpbuf_apply_suffix(word, sfx)
-          # Handle single suffixes without considering any prefixes or additional suffixes.
-          # The suffix itself may have the NEEDAFFIX flag attached to it, which means that
-          # it's not a real word without a second suffix.
-          yield @alphabet.decode_word(@tmpbuf) unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
-
-          # Handle combinations of a single suffix and a single prefix
-          prefixes_from_stem.matched_rules(@tmpbuf) do |pfx|
-            next unless pfx.cross && sfx.cross
-            if aff_flags_intersect?(flags, pfx.flag) && (@tmpbuf.size != pfx.remove_left || @fullstrip)
-              @tmpbuf2.clear
-              @tmpbuf2.concat(pfx.append_left)
-              (pfx.remove_left ... @tmpbuf.size).each {|i| @tmpbuf2 << @tmpbuf[i] }
-              yield @alphabet.decode_word(@tmpbuf2)
-            end
-          end
-
-          # Handle combinations of two suffixes
-          suffixes_from_stem.matched_rules(@tmpbuf) do |sfx2|
-            if aff_flags_intersect?(sfx.flag2, sfx2.flag) && (@tmpbuf.size != sfx2.remove_right || @fullstrip)
-              @tmpbuf3.clear
-              (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
-              @tmpbuf3.concat(sfx2.append_right)
-              yield @alphabet.decode_word(@tmpbuf3)
-
-              # Handle a possible prefix on top of two suffixes
-              prefixes_from_stem.matched_rules(@tmpbuf3) do |pfx|
-                next unless pfx.cross && sfx.cross && sfx2.cross
-                if (aff_flags_intersect?(flags, pfx.flag) || aff_flags_intersect?(sfx.flag2, pfx.flag)) && (@tmpbuf3.size != pfx.remove_left || @fullstrip)
-                  @tmpbuf2.clear
-                  @tmpbuf2.concat(pfx.append_left)
-                  (pfx.remove_left ... @tmpbuf3.size).each {|i| @tmpbuf2 << @tmpbuf3[i] }
-                  yield @alphabet.decode_word(@tmpbuf2)
-                end
-              end
-            end
-          end
-        end
+      expand_stem(word, flags) do |wordform, pfx_flag, sfx_flag|
+        yield @alphabet.decode_word(wordform)
       end
     end
   end
