@@ -12,7 +12,7 @@ words in text format from the affix-compressed Hunspell dictionaries.
 
 ## Usage
 
-The tool requires Ruby interpreter (https://www.ruby-lang.org) or Crystal compiler (https://crystal-lang.org).
+The tool requires Ruby interpreter (https://www.ruby-lang.org) or Crystal compiler (https://crystal-lang.org) in just a baseline configuration without any extra gems or shards.
 
 ### Extracting words from a dictionary
 
@@ -32,7 +32,7 @@ the strings are remapped to a 8-bit representation for reducing memory footprint
 fast child node lookups in a [Trie data structure](https://en.wikipedia.org/wiki/Trie).
 If this happens, the tool will bail out with an error message rather than silently producing incorrect results.
 * Processing some dictionaries may require huge amounts of memory, well beyond what is available on your computer.
-* Hunspell compatibility is limited and the following options are NOT supported:
+* Hunspell compatibility is incomplete and the following options are NOT supported:
 `SET encoding`,
 `COMPLEXPREFIXES`,
 `LANG langcode`,
