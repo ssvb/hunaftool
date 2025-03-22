@@ -661,6 +661,78 @@ class AFF
       end
     end
   end
+
+  # This is the opposite of "expand_stem". Given a wordform, this function probes
+  # all possible stems that can potentially generate this wordform and yields
+  # this information to the caller.
+  #
+  # Note: the yilded stem is in 8-bit encoding and it references to
+  #       the internal temporary buffer, which is going to be overwritten!
+  #       If this wordform needs to be stored somewhere, then a copy needs
+  #       to be allocated via the .dup method.
+  def lookup_stem(wordform)
+    suffixes_to_stem.matched_rules(wordform) do |sfx|
+      next if wordform.size == sfx.remove_right && !fullstrip? # FULLSTRIP compat
+      # Strip the current suffix
+      @tmpbuf.clear
+      (0 ... wordform.size - sfx.remove_right).each {|i| @tmpbuf << wordform[i] }
+      @tmpbuf.concat(sfx.append_right)
+      # Yield the resulting stem candidate
+      yield @tmpbuf, nil, sfx.flag
+
+      # one more suffix on top of a suffix
+      suffixes_to_stem.matched_rules(@tmpbuf) do |sfx2|
+        next if @tmpbuf.size == sfx2.remove_right && !fullstrip? # FULLSTRIP compat
+        # Check if this combination of suffixes is valid
+        next unless aff_flags_intersect?(sfx2.flag2, sfx.flag)
+        # Strip the current suffix after the stripped suffix
+        @tmpbuf2.clear
+        (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf2 << @tmpbuf[i] }
+        @tmpbuf2.concat(sfx2.append_right)
+        # Yield the resulting stem candidate
+        yield @tmpbuf2, nil, sfx2.flag
+      end
+    end
+
+    # a prefix
+    prefixes_to_stem.matched_rules(wordform) do |pfx|
+      next if wordform.size == pfx.remove_left && !fullstrip? # FULLSTRIP compat
+      # Strip the current prefix
+      @tmpbuf.clear
+      @tmpbuf.concat(pfx.append_left)
+      (pfx.remove_left ... wordform.size).each {|i| @tmpbuf << wordform[i] }
+      # Yield the resulting stem candidate
+      yield @tmpbuf, pfx.flag, nil
+
+      # a suffix on top of a prefix
+      suffixes_to_stem.matched_rules(@tmpbuf) do |sfx|
+        next if @tmpbuf.size == sfx.remove_right && !fullstrip? # FULLSTRIP compat
+        # Check the crossproduct flags to confirm that this suffix can be stripped.
+        next unless pfx.cross && sfx.cross
+        # Strip the current suffix after the stripped prefix
+        @tmpbuf2.clear
+        (0 ... @tmpbuf.size - sfx.remove_right).each {|i| @tmpbuf2 << @tmpbuf[i] }
+        @tmpbuf2.concat(sfx.append_right)
+        # Yield the resulting stem candidate
+        yield @tmpbuf2, pfx.flag, sfx.flag
+
+        # one more suffix on top of a suffix and a prefix
+        suffixes_to_stem.matched_rules(@tmpbuf2) do |sfx2|
+          next if @tmpbuf2.size == sfx2.remove_right && !fullstrip? # FULLSTRIP compat
+          # Check the crossproduct flags to confirm that this suffix can be stripped.
+          next unless sfx2.cross
+          # Check if this combination of suffixes is valid
+          next unless aff_flags_intersect?(sfx2.flag2, sfx.flag)
+          # Strip the current suffix after the stripped suffix
+          @tmpbuf3.clear
+          (0 ... @tmpbuf2.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf2[i] }
+          @tmpbuf3.concat(sfx2.append_right)
+          # Yield the resulting stem candidate
+          yield @tmpbuf3, pfx.flag, sfx2.flag
+        end
+      end
+    end
+  end
 end
 
 ###############################################################################
@@ -742,6 +814,7 @@ class WordData
 
   def encword             ; @encword end
   def flags               ; @flags end
+  def flags=(newflags)    ; @flags = newflags end
   def covers              ; @covers end
   def flags_merge(flags)  ; @flags = aff_flags_merge!(@flags, flags) end
   def flags_delete(flags) ; @flags = aff_flags_delete!(@flags, flags) end
@@ -759,6 +832,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     next if (line = line.strip).empty? || line =~ /^#/
     line.split(/[\,\|]/).each do |word|
       word = word.strip
+      next if word.empty?
       encword = aff.alphabet.encode_word(word)
       next if encword_to_idx.has_key?(encword)
       encword_to_idx[encword] = idx_to_data.size
@@ -769,69 +843,82 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   # have normal words below this index, and virtual stems at it and above
   virtual_stem_area_begin = idx_to_data.size
 
-  tmpbuf = "".bytes
-
-  # Going from words to all possible stems (including the virtual stems that
-  # aren't proper words themselves), find the prelimitary sets of flags that
-  # can be potentially used to construct such words.
+  # Going from wordforms to all possible stems (including the virtual stems
+  # that aren't proper wordforms themselves), find the preliminary sets
+  # of flags that can be potentially used to construct such wordforms.
   (0 ... virtual_stem_area_begin).each do |idx|
     encword = idx_to_data[idx].encword
-    aff.suffixes_to_stem.matched_rules(encword) do |sfx|
-      next if encword.size == sfx.remove_right && !aff.fullstrip?
 
-      tmpbuf.clear
-      (0 ... encword.size - sfx.remove_right).each {|i| tmpbuf << encword[i] }
-      tmpbuf.concat(sfx.append_right)
-
-      if (stem_idx = encword_to_idx.fetch(tmpbuf, -1)) != -1
-        idx_to_data[stem_idx].flags_merge(sfx.flag)
-      elsif !aff_flags_empty?(aff.virtual_stem_flag)
-        tmpbuf2 = tmpbuf.dup
-        stem_idx = idx_to_data.size
-        encword_to_idx[tmpbuf2] = idx_to_data.size
-        data = WordData.new(tmpbuf2)
-        data.flags_merge(sfx.flag)
+    aff.lookup_stem(encword) do |stem, pfx_flag, sfx_flag|
+      if (stem_idx = encword_to_idx.fetch(stem, -1)) != -1
+        idx_to_data[stem_idx].flags_merge(pfx_flag) if pfx_flag
+        idx_to_data[stem_idx].flags_merge(sfx_flag) if sfx_flag
+      elsif !aff_flags_empty?(aff.virtual_stem_flag) && !stem.empty?
+        stem_dup = stem.dup
+        encword_to_idx[stem_dup] = idx_to_data.size
+        data = WordData.new(stem_dup)
+        data.flags_merge(pfx_flag) if pfx_flag
+        data.flags_merge(sfx_flag) if sfx_flag
         idx_to_data.push(data)
       end
     end
   end
 
-  # Going from stems to the affixed words that they produce, identify and
-  # remove all invalid flags
   idx_to_data.each_with_index do |data, idx|
+    # Nothing to do for the entries that have no flags to begin with
     next if aff_flags_empty?(data.flags)
-    encstem = data.encword
-    aff.suffixes_from_stem.matched_rules(encstem) do |sfx|
-      next if encstem.size == sfx.remove_right && !aff.fullstrip?
-      next unless aff_flags_intersect?(data.flags, sfx.flag)
 
-      tmpbuf.clear
-      (0 ... encstem.size - sfx.remove_right).each {|i| tmpbuf << encstem[i] }
-      tmpbuf.concat(sfx.append_right)
+    problematic_combined_pfx_sfx = false
 
-      if encword_to_idx.fetch(tmpbuf, virtual_stem_area_begin) >= virtual_stem_area_begin
-        data.flags_delete(sfx.flag)
+    # Going from stems to the wordforms that they produce, identify and
+    # remove all invalid flags. First do this for single prefixes and
+    # for single suffixes independently from each other.
+    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+      if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+        if pfx_flag && sfx_flag
+          problematic_combined_pfx_sfx = true
+        elsif pfx_flag
+          data.flags_delete(pfx_flag)
+        elsif sfx_flag
+          data.flags_delete(sfx_flag)
+        end
       end
     end
-  end
 
-  # Now that all flags are valid, retrive the full list of words that can
-  # be generated from this stem
-  idx_to_data.each_with_index do |data, idx|
+    # Nothing left to do if all flags got invalidated
     next if aff_flags_empty?(data.flags)
-    encstem = data.encword
 
-    data.covers.add(idx) unless idx >= virtual_stem_area_begin
+    if problematic_combined_pfx_sfx
+      # Two different flag conflicts resolving strategies: either always favour
+      # suffixes or always favour prefixes. Actually there could be theoretically
+      # many permutations, but let's keep things simple.
+      favor_pfx_flags = nil
+      favor_sfx_flags = nil
+      aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+        if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+          if pfx_flag && sfx_flag
+            favor_pfx_flags = aff_flags_delete!(favor_pfx_flags || data.flags.dup, sfx_flag)
+            favor_sfx_flags = aff_flags_delete!(favor_sfx_flags || data.flags.dup, pfx_flag)
+          elsif pfx_flag || sfx_flag
+            raise "should be unreachable"
+          end
+        end
+      end
+      if favor_pfx_flags && favor_sfx_flags
+        # The "favor prefixes" variant goes to the current slot
+        data.flags = favor_pfx_flags
+        # Also a new slot is allocated for the "favor suffixes" variant, but
+        # beware that this requires special care at the "produce output" step
+        data2 = WordData.new(data.encword)
+        data2.flags = favor_sfx_flags
+        idx_to_data.push(data2)
+      end
+    end
 
-    aff.suffixes_from_stem.matched_rules(encstem) do |sfx|
-      next if encstem.size == sfx.remove_right && !aff.fullstrip?
-      next unless aff_flags_intersect?(data.flags, sfx.flag)
-
-      tmpbuf.clear
-      (0 ... encstem.size - sfx.remove_right).each {|i| tmpbuf << encstem[i] }
-      tmpbuf.concat(sfx.append_right)
-
-      if (tmpidx = encword_to_idx.fetch(tmpbuf, virtual_stem_area_begin)) < virtual_stem_area_begin
+    # Now that all flags are valid, retrive the full list of words that can
+    # be generated from this stem
+    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+      if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
         data.covers.add(tmpidx)
       end
     end
@@ -857,7 +944,11 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
 
   # Produce output
   order.each do |idx|
-    stem_is_virtual = (idx >= virtual_stem_area_begin)
+    # This wacky looking check is here because the prefixes/suffixes split
+    # processing logic could have appeneded some non-virtual stems to the end of
+    # the list beyond the 'virtual_stem_area_begin'. This needs to be cleaned
+    # up later.
+    stem_is_virtual = (encword_to_idx.fetch(idx_to_data[idx].encword, virtual_stem_area_begin) >= virtual_stem_area_begin)
     data = idx_to_data[idx]
     effectivelycovers = 0
     data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
