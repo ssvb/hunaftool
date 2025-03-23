@@ -821,6 +821,51 @@ class WordData
 end
 
 ###############################################################################
+# This removes redundant flags. But the algorithm is not perfect.
+# TODO: bruteforce the exact solution for the small sets of flags.
+###############################################################################
+
+def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
+  flag_covers = {flags => [stem].to_set}.clear
+  aff.expand_stem(stem, flags) do |wordform, pfx_flag, sfx_flag|
+    next unless (pfx_flag || sfx_flag) && (yield wordform)
+    wordform_dup = wordform.dup
+    if pfx_flag && sfx_flag
+      tmp_flag = aff_flags_merge!(pfx_flag.dup, sfx_flag)
+      flag_covers[tmp_flag] = [wordform_dup].to_set unless flag_covers.has_key?(tmp_flag)
+      flag_covers[tmp_flag].add(wordform_dup)
+    elsif pfx_flag
+      flag_covers[pfx_flag] = [wordform_dup].to_set unless flag_covers.has_key?(pfx_flag)
+      flag_covers[pfx_flag].add(wordform_dup)
+    elsif sfx_flag
+      flag_covers[sfx_flag] = [wordform_dup].to_set unless flag_covers.has_key?(sfx_flag)
+      flag_covers[sfx_flag].add(wordform_dup)
+    end
+  end
+
+  result_flags = aff_flags_delete!(flags.dup, flags) # a fancy way of clearing it
+  already_covered = [stem].to_set.clear
+
+  # greedy
+  flag_covers_sorted = flag_covers.to_a.sort do |a, b|
+    b[1].size == a[1].size ? flag_names[a[0]] <=> flag_names[b[0]] : b[1].size <=> a[1].size
+  end
+
+  flag_covers_sorted.each do |flag, wordforms|
+    useful = false
+    wordforms.each do |wordform|
+      unless already_covered === wordform
+        useful = true
+        already_covered.add(wordform)
+      end
+    end
+    result_flags = aff_flags_merge!(result_flags, flag) if useful
+  end
+
+  result_flags
+end
+
+###############################################################################
 
 def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   aff = AFF.new(aff_file, alphabet)
@@ -863,6 +908,10 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
       end
     end
   end
+
+  # Frequency statistics for the different flags usage
+  flag_freqs = {"".to_aff_flags => 0}.clear
+  flag_names = {"".to_aff_flags => ""}.clear
 
   idx_to_data.each_with_index do |data, idx|
     # Nothing to do for the entries that have no flags to begin with
@@ -920,6 +969,30 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
       if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
         data.covers.add(tmpidx)
+
+        # Collect flag names and their usage statistics
+        if pfx_flag && sfx_flag
+          tmp_flag_dup = aff_flags_merge!(pfx_flag.dup, sfx_flag)
+          unless flag_freqs.has_key?(tmp_flag_dup)
+            flag_freqs[tmp_flag_dup] = 0
+            flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
+          end
+          flag_freqs[tmp_flag_dup] += 1
+        elsif pfx_flag
+          unless flag_freqs.has_key?(pfx_flag)
+            tmp_flag_dup = pfx_flag.dup
+            flag_freqs[tmp_flag_dup] = 0
+            flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
+          end
+          flag_freqs[pfx_flag] += 1
+        elsif sfx_flag
+          unless flag_freqs.has_key?(sfx_flag)
+            tmp_flag_dup = sfx_flag.dup
+            flag_freqs[tmp_flag_dup] = 0
+            flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
+          end
+          flag_freqs[sfx_flag] += 1
+        end
       end
     end
   end
@@ -950,6 +1023,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     # up later.
     stem_is_virtual = (encword_to_idx.fetch(idx_to_data[idx].encword, virtual_stem_area_begin) >= virtual_stem_area_begin)
     data = idx_to_data[idx]
+    data.flags = optimize_flags(aff, data.encword, data.flags, flag_freqs, flag_names) {|wordform| todo[encword_to_idx[wordform]] }
     effectivelycovers = 0
     data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
     if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1)
