@@ -809,13 +809,14 @@ class WordData
   def initialize(encword = "".bytes)
     @encword  = encword
     @flags    = AffFlags.need_hash? ? {0 => true}.clear : I64_0
-    @covers   = [0].to_set.clear
+    @covers   = [0].clear
   end
 
   def encword             ; @encword end
   def flags               ; @flags end
   def flags=(newflags)    ; @flags = newflags end
   def covers              ; @covers end
+  def covers=(newcovers)  ; @covers = newcovers end
   def flags_merge(flags)  ; @flags = aff_flags_merge!(@flags, flags) end
   def flags_delete(flags) ; @flags = aff_flags_delete!(@flags, flags) end
 end
@@ -912,6 +913,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   # Frequency statistics for the different flags usage
   flag_freqs = {"".to_aff_flags => 0}.clear
   flag_names = {"".to_aff_flags => ""}.clear
+  tmp_covers = [0].to_set.clear
 
   idx_to_data.each_with_index do |data, idx|
     # Nothing to do for the entries that have no flags to begin with
@@ -966,9 +968,10 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
 
     # Now that all flags are valid, retrive the full list of words that can
     # be generated from this stem
+    tmp_covers.clear
     aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
       if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
-        data.covers.add(tmpidx)
+        tmp_covers.add(tmpidx)
 
         # Collect flag names and their usage statistics
         if pfx_flag && sfx_flag
@@ -995,6 +998,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
         end
       end
     end
+    data.covers = tmp_covers.to_a
   end
 
   # Greedily select those stems, which cover more words. In case of a tie, select the
