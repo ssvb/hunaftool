@@ -21,8 +21,8 @@ jobs:
           crystal --version
           crystal build --release hunaftool.rb
           ./hunaftool
-          ruby run-hunaftool-tests.rb ./hunaftool tests
-          ruby run-hunaftool-tests.rb "ruby hunaftool.rb" tests
+          ruby tests/run-hunaftool-tests.rb ./hunaftool tests
+          ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
 
       - name: Run tests with the old Crystal 1.6.0 from Debian "bookworm"
         run: |
@@ -33,4 +33,4 @@ jobs:
           export CRYSTAL_LIBRARY_PATH=`pwd`/crystal-1.6.0-1/lib/crystal/lib
           export LD_LIBRARY_PATH=$CRYSTAL_LIBRARY_PATH:$LD_LIBRARY_PATH
           crystal-1.6.0-1/bin/crystal build --release hunaftool.rb -o hunaftool-oldcr
-          ruby run-hunaftool-tests.rb ./hunaftool-oldcr tests
+          ruby tests/run-hunaftool-tests.rb ./hunaftool-oldcr tests
