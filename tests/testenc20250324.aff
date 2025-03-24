@@ -1,0 +1,13 @@
+SET UTF-8
+NEEDAFFIX ~
+TRY ayvburgercl
+PFX X Y 1
+PFX X aay bu aayr
+SFX Y Y 1
+SFX Y aaa yv/Z aaa
+SFX Z Y 1
+SFX Z v rger v
+SFX 1 Y 1
+SFX 1 0 0/XY .
+SFX 2 Y 1
+SFX 2 0 0/XY~ .

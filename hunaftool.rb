@@ -827,11 +827,29 @@ end
 ###############################################################################
 
 def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
-  flag_covers = {flags => [stem].to_set}.clear
+  # Empty flags sample
+  empty_flags = aff_flags_delete!(flags.dup, flags)
+  # Empty flags is a special slot. It's needed just in case if there's zero
+  # affix producing the stem itself (together with some flag). So we need
+  # an empty flag to "compete" against it and be able to override it.
+  # See testenc20250324.aff in the tests directory.
+  flag_covers = {empty_flags => [stem].to_set.clear}
+
+  # Due to memory usage constraints in the main part of the algorithm, we
+  # used to have this information earlier, but discarded it and need to
+  # rebuild it again. Figure out the mapping between each flag and the
+  # wordforms that are generated resulting from that flag. Prefix and
+  # suffix flags have a complex interaction, some wordforms are generated
+  # only when a specific suffix is paired with a specific prefix. So
+  # prefix+suffix pairs are handled as separate entities. Moreover,
+  # the cross product settings may forbid or allow combining prefixes
+  # with suffixes.
   aff.expand_stem(stem, flags) do |wordform, pfx_flag, sfx_flag|
-    next unless (pfx_flag || sfx_flag) && (yield wordform)
+    # The caller filters the wordforms and we keep only those that are really useful.
+    next unless (yield wordform)
     wordform_dup = wordform.dup
     if pfx_flag && sfx_flag
+      # a prefix+suffix pair is an entity of its own
       tmp_flag = aff_flags_merge!(pfx_flag.dup, sfx_flag)
       flag_covers[tmp_flag] = [wordform_dup].to_set unless flag_covers.has_key?(tmp_flag)
       flag_covers[tmp_flag].add(wordform_dup)
@@ -844,14 +862,19 @@ def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
     end
   end
 
-  result_flags = aff_flags_delete!(flags.dup, flags) # a fancy way of clearing it
-  already_covered = [stem].to_set.clear
+  # If there's no NEEDAFFIX flag, then every flag combination also additionally produces
+  # the stem itself.
+  if aff_flags_empty?(aff.virtual_stem_flag) || !aff_flags_intersect?(flags, aff.virtual_stem_flag)
+    flag_covers.each {|k, v| v.add(stem) }
+  end
 
-  # greedy
+  # Greedy selection, starting from those flags that cover more wordforms. Ties
+  # are resolved by alphabetic sorting of the affix flag names.
   flag_covers_sorted = flag_covers.to_a.sort do |a, b|
     b[1].size == a[1].size ? flag_names[a[0]] <=> flag_names[b[0]] : b[1].size <=> a[1].size
   end
-
+  result_flags = empty_flags.dup
+  already_covered = [stem].to_set.clear
   flag_covers_sorted.each do |flag, wordforms|
     useful = false
     wordforms.each do |wordform|
@@ -862,7 +885,6 @@ def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
     end
     result_flags = aff_flags_merge!(result_flags, flag) if useful
   end
-
   result_flags
 end
 
@@ -903,6 +925,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
         stem_dup = stem.dup
         encword_to_idx[stem_dup] = idx_to_data.size
         data = WordData.new(stem_dup)
+        data.flags_merge(aff.virtual_stem_flag)
         data.flags_merge(pfx_flag) if pfx_flag
         data.flags_merge(sfx_flag) if sfx_flag
         idx_to_data.push(data)
@@ -910,9 +933,9 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     end
   end
 
-  # Frequency statistics for the different flags usage
+  # Frequency statistics for different flags usage
   flag_freqs = {"".to_aff_flags => 0}.clear
-  flag_names = {"".to_aff_flags => ""}.clear
+  flag_names = {"".to_aff_flags => ""} # have a name for the empty flags too
   tmp_covers = [0].to_set.clear
 
   idx_to_data.each_with_index do |data, idx|
@@ -1006,7 +1029,6 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   order = idx_to_data.size.times.to_a.sort do |idx1, idx2|
     if idx_to_data[idx2].covers.size == idx_to_data[idx1].covers.size
       if idx_to_data[idx1].encword.size == idx_to_data[idx2].encword.size
-        # Fallback to the alphabetic sort
         idx_to_data[idx1].encword <=> idx_to_data[idx2].encword
       else
         idx_to_data[idx1].encword.size <=> idx_to_data[idx2].encword.size
@@ -1016,28 +1038,32 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     end
   end
 
+  # Have a boolean TODO flag for each of the wordforms that needs to be
+  # present in the dictionary.
   todo = [true] * virtual_stem_area_begin
   final_result = {"" => true}.clear
 
-  # Produce output
+  # Produce output for all stems that generate multiple wordforms
   order.each do |idx|
-    # This wacky looking check is here because the prefixes/suffixes split
-    # processing logic could have appeneded some non-virtual stems to the end of
-    # the list beyond the 'virtual_stem_area_begin'. This needs to be cleaned
-    # up later.
-    stem_is_virtual = (encword_to_idx.fetch(idx_to_data[idx].encword, virtual_stem_area_begin) >= virtual_stem_area_begin)
     data = idx_to_data[idx]
+    stem_is_virtual = aff_flags_intersect?(data.flags, aff.virtual_stem_flag)
     data.flags = optimize_flags(aff, data.encword, data.flags, flag_freqs, flag_names) {|wordform| todo[encword_to_idx[wordform]] }
     effectivelycovers = 0
     data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
-    if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1)
+    # It's not useful to have a virtual stem producing only one wordform
+    # since we can just add that wordform itself without any fancy flags.
+    # Flags optimization may result in an empty set of flags too.
+    if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1) &&
+                                !aff_flags_empty?(data.flags)
       final_result[aff.alphabet.decode_word(data.encword) +
         "/" + aff_flags_to_s(data.flags) + (stem_is_virtual ?
               aff_flags_to_s(aff.virtual_stem_flag) : "")] = true
+      # remove the result from the TODO list
       data.covers.each {|idx2| todo[idx2] = false }
     end
   end
 
+  # Add the leftover wordforms from the TODO list as-is
   todo.each_index do |idx|
     if todo[idx]
       data = idx_to_data[idx]
@@ -1045,6 +1071,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     end
   end
 
+  # Write the results to a file or to STDOUT
   if out_file
     fh = File.open(out_file, "w")
     fh.puts final_result.size
