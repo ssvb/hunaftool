@@ -631,41 +631,49 @@ class AFF
         # wordform (the second level suffix is necessary).
         yield @tmpbuf, nil, sfx.flag unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
 
-        # Iterate over all second level suffixes.
-        suffixes_from_stem.matched_rules(@tmpbuf) do |sfx2|
-          # Check if we have a match for the necessary affix flags.
-          if aff_flags_intersect?(sfx.flag2, sfx2.flag) &&
-                                        (@tmpbuf.size != sfx2.remove_right || @fullstrip)
-            # Apply the current second level suffix on top of the first level suffix.
-            @tmpbuf3.clear
-            (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
-            @tmpbuf3.concat(sfx2.append_right)
-            # Yield a wordform constructed from two suffixes.
-            yield @tmpbuf3, nil, sfx.flag
+        unless aff_flags_empty?(sfx.flag2)
+          # Iterate over all second level suffixes.
+          suffixes_from_stem.matched_rules(@tmpbuf) do |sfx2|
+            # Check if we have a match for the necessary affix flags.
+            if aff_flags_intersect?(sfx.flag2, sfx2.flag) &&
+                                          (@tmpbuf.size != sfx2.remove_right || @fullstrip)
+              # Apply the current second level suffix on top of the first level suffix.
+              @tmpbuf3.clear
+              (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
+              @tmpbuf3.concat(sfx2.append_right)
+              # Yield a wordform constructed from two suffixes.
+              yield @tmpbuf3, nil, sfx.flag
 
-            # Iterate over prefixes after having two suffixes already applied.
-            prefixes_from_stem.matched_rules(@tmpbuf3) do |pfx|
-              # Check the crossproduct flags to confirm that this prefix can be applied.
-              next unless pfx.cross && sfx.cross && sfx2.cross
-              # Check if we have a match for the necessary affix flags.
-              if (aff_flags_intersect?(flags, pfx.flag) ||
-                  aff_flags_intersect?(sfx.flag2, pfx.flag)) &&
-                                        (@tmpbuf3.size != pfx.remove_left || @fullstrip)
-                # Apply the current prefix on top of the two already applied suffixes.
-                @tmpbuf2.clear
-                @tmpbuf2.concat(pfx.append_left)
-                (pfx.remove_left ... @tmpbuf3.size).each {|i| @tmpbuf2 << @tmpbuf3[i] }
-                # Yield a wordform constructed from two suffixes and one prefix.
-                yield @tmpbuf2, pfx.flag, sfx.flag
+              # If no cross product support on the suffix side, then we are done
+              next unless sfx.cross && sfx2.cross
+
+              # Iterate over prefixes after having two suffixes already applied.
+              prefixes_from_stem.matched_rules(@tmpbuf3) do |pfx|
+                # Check the crossproduct flags to confirm that this prefix can be applied.
+                next unless pfx.cross
+                # Check if we have a match for the necessary affix flags.
+                if (aff_flags_intersect?(flags, pfx.flag) ||
+                    aff_flags_intersect?(sfx.flag2, pfx.flag)) &&
+                                          (@tmpbuf3.size != pfx.remove_left || @fullstrip)
+                  # Apply the current prefix on top of the two already applied suffixes.
+                  @tmpbuf2.clear
+                  @tmpbuf2.concat(pfx.append_left)
+                  (pfx.remove_left ... @tmpbuf3.size).each {|i| @tmpbuf2 << @tmpbuf3[i] }
+                  # Yield a wordform constructed from two suffixes and one prefix.
+                  yield @tmpbuf2, pfx.flag, sfx.flag
+                end
               end
             end
           end
         end
 
+        # If no cross product support on the suffix side, then we are done
+        next unless sfx.cross
+
         # Iterate over prefixes after having one suffix already applied.
         prefixes_from_stem.matched_rules(@tmpbuf) do |pfx|
           # Check the crossproduct flags to confirm that this prefix can be applied.
-          next unless pfx.cross && sfx.cross
+          next unless pfx.cross
           # Check if we have a match for the necessary affix flags.
           if (aff_flags_intersect?(flags, pfx.flag) ||
               aff_flags_intersect?(sfx.flag2, pfx.flag)) &&
@@ -735,11 +743,14 @@ class AFF
       # Yield the resulting stem candidate
       yield @tmpbuf, pfx.flag, nil
 
+      # If no cross product support on the prefix side, then we are done
+      next unless pfx.cross
+
       # a suffix on top of a prefix
       suffixes_to_stem.matched_rules(@tmpbuf) do |sfx|
         next if @tmpbuf.size == sfx.remove_right && !fullstrip? # FULLSTRIP compat
         # Check the crossproduct flags to confirm that this suffix can be stripped.
-        next unless pfx.cross && sfx.cross
+        next unless sfx.cross
         # Strip the current suffix after the stripped prefix
         @tmpbuf2.clear
         (0 ... @tmpbuf.size - sfx.remove_right).each {|i| @tmpbuf2 << @tmpbuf[i] }
