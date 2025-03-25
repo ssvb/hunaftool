@@ -11,6 +11,7 @@ VERSION = 0.7
 ###############################################################################
 
 require "set"
+require "benchmark"
 
 ###############################################################################
 # This tool is implemented using a common subset of Ruby and Crystal
@@ -48,6 +49,36 @@ U8_0 = "\0".bytes.first
 
 # A 64-bit zero constant to hint the use of Int64 instead of Int32 for Crystal
 I64_0 = (0x3FFFFFFFFFFFFFFF & 0)
+
+###############################################################################
+
+module Cfg
+  @@verbose = false
+  def self.verbose?    ; @@verbose end
+  def self.verbose=(v) ; @@verbose = v end
+end
+
+# Run a subtask with optional reporting about performance and memory usage
+def subtask(caption)
+  unless Cfg.verbose?
+    yield
+    return
+  end
+  if COMPILED_BY_CRYSTAL
+    total_bytes = GC.stats.total_bytes
+    t = Benchmark.measure { yield }
+    GC.collect
+    footprint = GC.stats.heap_size - GC.stats.free_bytes
+    alloc_bw = GC.stats.total_bytes - total_bytes
+    STDERR.printf("== %s (time: +%.2fs, alloc: ±%.0fMB, total: %.0fMB)\n",
+                  caption, t.real, alloc_bw.to_f / 1000000,
+                  footprint.to_f / 1000000)
+  else
+    t = Benchmark.measure { yield }
+    STDERR.printf("== %s (+%.2f s)\n", caption, t.real)
+  end
+  nil
+end
 
 ###############################################################################
 # Remap UTF-8 words to indexable 8-bit arrays for performance reasons. All
@@ -891,20 +922,23 @@ end
 ###############################################################################
 
 def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
+  STDERR.puts "== Load «#{aff_file}»" if Cfg.verbose?
   aff = AFF.new(aff_file, alphabet)
 
-  # Load the text file into memory
   encword_to_idx = {"".bytes => 0}.clear
   idx_to_data = [WordData.new].clear
-  File.open(txt_file).each_line do |line|
-    next if (line = line.strip).empty? || line =~ /^#/
-    line.split(/[\,\|]/).each do |word|
-      word = word.strip
-      next if word.empty?
-      encword = aff.alphabet.encode_word(word)
-      next if encword_to_idx.has_key?(encword)
-      encword_to_idx[encword] = idx_to_data.size
-      idx_to_data.push(WordData.new(encword))
+
+  subtask "Load «#{txt_file}»" do
+    File.open(txt_file).each_line do |line|
+      next if (line = line.strip).empty? || line =~ /^#/
+      line.split(/[\,\|]/).each do |word|
+        word = word.strip
+        next if word.empty?
+        encword = aff.alphabet.encode_word(word)
+        next if encword_to_idx.has_key?(encword)
+        encword_to_idx[encword] = idx_to_data.size
+        idx_to_data.push(WordData.new(encword))
+      end
     end
   end
 
@@ -914,21 +948,21 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   # Going from wordforms to all possible stems (including the virtual stems
   # that aren't proper wordforms themselves), find the preliminary sets
   # of flags that can be potentially used to construct such wordforms.
-  (0 ... virtual_stem_area_begin).each do |idx|
-    encword = idx_to_data[idx].encword
-
-    aff.lookup_stem(encword) do |stem, pfx_flag, sfx_flag|
-      if (stem_idx = encword_to_idx.fetch(stem, -1)) != -1
-        idx_to_data[stem_idx].flags_merge(pfx_flag) if pfx_flag
-        idx_to_data[stem_idx].flags_merge(sfx_flag) if sfx_flag
-      elsif !aff_flags_empty?(aff.virtual_stem_flag) && !stem.empty?
-        stem_dup = stem.dup
-        encword_to_idx[stem_dup] = idx_to_data.size
-        data = WordData.new(stem_dup)
-        data.flags_merge(aff.virtual_stem_flag)
-        data.flags_merge(pfx_flag) if pfx_flag
-        data.flags_merge(sfx_flag) if sfx_flag
-        idx_to_data.push(data)
+  subtask "Find stem candidates and their preliminary affix flags" do
+    (0 ... virtual_stem_area_begin).each do |idx|
+      aff.lookup_stem(idx_to_data[idx].encword) do |stem, pfx_flag, sfx_flag|
+        if (stem_idx = encword_to_idx.fetch(stem, -1)) != -1
+          idx_to_data[stem_idx].flags_merge(pfx_flag) if pfx_flag
+          idx_to_data[stem_idx].flags_merge(sfx_flag) if sfx_flag
+        elsif !aff_flags_empty?(aff.virtual_stem_flag) && !stem.empty?
+          stem_dup = stem.dup
+          encword_to_idx[stem_dup] = idx_to_data.size
+          data = WordData.new(stem_dup)
+          data.flags_merge(aff.virtual_stem_flag)
+          data.flags_merge(pfx_flag) if pfx_flag
+          data.flags_merge(sfx_flag) if sfx_flag
+          idx_to_data.push(data)
+        end
       end
     end
   end
@@ -938,103 +972,106 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   flag_names = {"".to_aff_flags => ""} # have a name for the empty flags too
   tmp_covers = [0].to_set.clear
 
-  idx_to_data.each_with_index do |data, idx|
-    # Nothing to do for the entries that have no flags to begin with
-    next if aff_flags_empty?(data.flags)
+  subtask "Filter out bad affix flags from stems" do
+    idx_to_data.each_with_index do |data, idx|
+      # Nothing to do for the entries that have no flags to begin with
+      next if aff_flags_empty?(data.flags)
 
-    problematic_combined_pfx_sfx = false
+      problematic_combined_pfx_sfx = false
 
-    # Going from stems to the wordforms that they produce, identify and
-    # remove all invalid flags. First do this for single prefixes and
-    # for single suffixes independently from each other.
-    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
-      if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
-        if pfx_flag && sfx_flag
-          problematic_combined_pfx_sfx = true
-        elsif pfx_flag
-          data.flags_delete(pfx_flag)
-        elsif sfx_flag
-          data.flags_delete(sfx_flag)
-        end
-      end
-    end
-
-    # Nothing left to do if all flags got invalidated
-    next if aff_flags_empty?(data.flags)
-
-    if problematic_combined_pfx_sfx
-      # Two different flag conflicts resolving strategies: either always favour
-      # suffixes or always favour prefixes. Actually there could be theoretically
-      # many permutations, but let's keep things simple.
-      favor_pfx_flags = nil
-      favor_sfx_flags = nil
+      # Going from stems to the wordforms that they produce, identify and
+      # remove all invalid flags. First do this for single prefixes and
+      # for single suffixes independently from each other.
       aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
         if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
           if pfx_flag && sfx_flag
-            favor_pfx_flags = aff_flags_delete!(favor_pfx_flags || data.flags.dup, sfx_flag)
-            favor_sfx_flags = aff_flags_delete!(favor_sfx_flags || data.flags.dup, pfx_flag)
-          elsif pfx_flag || sfx_flag
-            raise "should be unreachable"
+            problematic_combined_pfx_sfx = true
+          elsif pfx_flag
+            data.flags_delete(pfx_flag)
+          elsif sfx_flag
+            data.flags_delete(sfx_flag)
           end
         end
       end
-      if favor_pfx_flags && favor_sfx_flags
-        # The "favor prefixes" variant goes to the current slot
-        data.flags = favor_pfx_flags
-        # Also a new slot is allocated for the "favor suffixes" variant, but
-        # beware that this requires special care at the "produce output" step
-        data2 = WordData.new(data.encword)
-        data2.flags = favor_sfx_flags
-        idx_to_data.push(data2)
-      end
-    end
 
-    # Now that all flags are valid, retrive the full list of words that can
-    # be generated from this stem
-    tmp_covers.clear
-    aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
-      if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
-        tmp_covers.add(tmpidx)
+      # Nothing left to do if all flags got invalidated
+      next if aff_flags_empty?(data.flags)
 
-        # Collect flag names and their usage statistics
-        if pfx_flag && sfx_flag
-          tmp_flag_dup = aff_flags_merge!(pfx_flag.dup, sfx_flag)
-          unless flag_freqs.has_key?(tmp_flag_dup)
-            flag_freqs[tmp_flag_dup] = 0
-            flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
+      if problematic_combined_pfx_sfx
+        # Two different flag conflicts resolving strategies: either always favour
+        # suffixes or always favour prefixes. Actually there could be theoretically
+        # many permutations, but let's keep things simple.
+        favor_pfx_flags = nil
+        favor_sfx_flags = nil
+        aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+          if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+            if pfx_flag && sfx_flag
+              favor_pfx_flags = aff_flags_delete!(favor_pfx_flags || data.flags.dup, sfx_flag)
+              favor_sfx_flags = aff_flags_delete!(favor_sfx_flags || data.flags.dup, pfx_flag)
+            elsif pfx_flag || sfx_flag
+              raise "should be unreachable"
+            end
           end
-          flag_freqs[tmp_flag_dup] += 1
-        elsif pfx_flag
-          unless flag_freqs.has_key?(pfx_flag)
-            tmp_flag_dup = pfx_flag.dup
-            flag_freqs[tmp_flag_dup] = 0
-            flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
-          end
-          flag_freqs[pfx_flag] += 1
-        elsif sfx_flag
-          unless flag_freqs.has_key?(sfx_flag)
-            tmp_flag_dup = sfx_flag.dup
-            flag_freqs[tmp_flag_dup] = 0
-            flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
-          end
-          flag_freqs[sfx_flag] += 1
+        end
+        if favor_pfx_flags && favor_sfx_flags
+          # The "favor prefixes" variant goes to the current slot
+          data.flags = favor_pfx_flags
+          # Also a new slot is allocated for the "favor suffixes" variant, but
+          # beware that this requires special care at the "produce output" step
+          data2 = WordData.new(data.encword)
+          data2.flags = favor_sfx_flags
+          idx_to_data.push(data2)
         end
       end
+
+      # Now that all flags are valid, retrive the full list of words that can
+      # be generated from this stem
+      tmp_covers.clear
+      aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+        if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
+          tmp_covers.add(tmpidx)
+
+          # Collect flag names and their usage statistics
+          if pfx_flag && sfx_flag
+            tmp_flag_dup = aff_flags_merge!(pfx_flag.dup, sfx_flag)
+            unless flag_freqs.has_key?(tmp_flag_dup)
+              flag_freqs[tmp_flag_dup] = 0
+              flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
+            end
+            flag_freqs[tmp_flag_dup] += 1
+          elsif pfx_flag
+            unless flag_freqs.has_key?(pfx_flag)
+              tmp_flag_dup = pfx_flag.dup
+              flag_freqs[tmp_flag_dup] = 0
+              flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
+            end
+            flag_freqs[pfx_flag] += 1
+          elsif sfx_flag
+            unless flag_freqs.has_key?(sfx_flag)
+              tmp_flag_dup = sfx_flag.dup
+              flag_freqs[tmp_flag_dup] = 0
+              flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
+            end
+            flag_freqs[sfx_flag] += 1
+          end
+        end
+      end
+      data.covers = tmp_covers.to_a
     end
-    data.covers = tmp_covers.to_a
   end
 
-  # Greedily select those stems, which cover more words. In case of a tie, select the
-  # shorter one
-  order = idx_to_data.size.times.to_a.sort do |idx1, idx2|
-    if idx_to_data[idx2].covers.size == idx_to_data[idx1].covers.size
-      if idx_to_data[idx1].encword.size == idx_to_data[idx2].encword.size
-        idx_to_data[idx1].encword <=> idx_to_data[idx2].encword
+  order = idx_to_data.size.times.to_a
+  subtask "Sort stem candidates by the number of their wordforms" do
+    order.sort! do |idx1, idx2|
+      if idx_to_data[idx2].covers.size == idx_to_data[idx1].covers.size
+        if idx_to_data[idx1].encword.size == idx_to_data[idx2].encword.size
+          idx_to_data[idx1].encword <=> idx_to_data[idx2].encword
+        else
+          idx_to_data[idx1].encword.size <=> idx_to_data[idx2].encword.size
+        end
       else
-        idx_to_data[idx1].encword.size <=> idx_to_data[idx2].encword.size
+        idx_to_data[idx2].covers.size <=> idx_to_data[idx1].covers.size
       end
-    else
-      idx_to_data[idx2].covers.size <=> idx_to_data[idx1].covers.size
     end
   end
 
@@ -1043,43 +1080,47 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   todo = [true] * virtual_stem_area_begin
   final_result = {"" => true}.clear
 
-  # Produce output for all stems that generate multiple wordforms
-  order.each do |idx|
-    data = idx_to_data[idx]
-    stem_is_virtual = aff_flags_intersect?(data.flags, aff.virtual_stem_flag)
-    data.flags = optimize_flags(aff, data.encword, data.flags, flag_freqs, flag_names) {|wordform| todo[encword_to_idx[wordform]] }
-    effectivelycovers = 0
-    data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
-    # It's not useful to have a virtual stem producing only one wordform
-    # since we can just add that wordform itself without any fancy flags.
-    # Flags optimization may result in an empty set of flags too.
-    if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1) &&
-                                !aff_flags_empty?(data.flags)
-      final_result[aff.alphabet.decode_word(data.encword) +
-        "/" + aff_flags_to_s(data.flags) + (stem_is_virtual ?
-              aff_flags_to_s(aff.virtual_stem_flag) : "")] = true
-      # remove the result from the TODO list
-      data.covers.each {|idx2| todo[idx2] = false }
-    end
-  end
-
-  # Add the leftover wordforms from the TODO list as-is
-  todo.each_index do |idx|
-    if todo[idx]
+  subtask "Greedily choose useful stems and optimize their affix flags" do
+    order.each do |idx|
       data = idx_to_data[idx]
-      final_result[aff.alphabet.decode_word(data.encword)] = true
+      stem_is_virtual = aff_flags_intersect?(data.flags, aff.virtual_stem_flag)
+      data.flags = optimize_flags(aff, data.encword, data.flags, flag_freqs,
+                                  flag_names) {|wordform| todo[encword_to_idx[wordform]] }
+      effectivelycovers = 0
+      data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
+      # It's not useful to have a virtual stem producing only one wordform
+      # since we can just add that wordform itself without any fancy flags.
+      # Flags optimization may result in an empty set of flags too.
+      if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1) &&
+                                  !aff_flags_empty?(data.flags)
+        final_result[aff.alphabet.decode_word(data.encword) +
+          "/" + aff_flags_to_s(data.flags) + (stem_is_virtual ?
+                aff_flags_to_s(aff.virtual_stem_flag) : "")] = true
+        # remove the result from the TODO list
+        data.covers.each {|idx2| todo[idx2] = false }
+      end
     end
   end
 
-  # Write the results to a file or to STDOUT
-  if out_file
-    fh = File.open(out_file, "w")
-    fh.puts final_result.size
-    final_result.keys.sort.each {|word| fh.puts word }
-    fh.close
-  else
-    puts final_result.size
-    final_result.keys.sort.each {|word| puts word }
+  subtask "Add the leftover wordforms without any affix flags" do
+    todo.each_index do |idx|
+      if todo[idx]
+        data = idx_to_data[idx]
+        final_result[aff.alphabet.decode_word(data.encword)] = true
+      end
+    end
+  end
+
+  subtask "Write sorted results to «#{out_file ? out_file : "stdout"}»" do
+    if out_file
+      fh = File.open(out_file, "w")
+      fh.puts final_result.size
+      final_result.keys.sort.each {|word| fh.puts word }
+      fh.close
+    else
+      puts final_result.size
+      final_result.keys.sort.each {|word| puts word }
+    end
   end
 end
 
@@ -1087,7 +1128,7 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
   begin
     try_convert_txt_to_dic("", aff_file, txt_file, out_file)
   rescue AlphabetException
-    STDERR.puts "! Please ensure that the whole alphabet is accounted for in the TRY directive."
+    STDERR.puts "! Please ensure that the TRY directive covers the whole alphabet."
     a1 = alphabet_from_file(aff_file)
     a2 = alphabet_from_file(txt_file)
     try_convert_txt_to_dic(a1 + a2, aff_file, txt_file, out_file)
@@ -1230,13 +1271,12 @@ end
 # Parse command line options
 ###############################################################################
 
-verbose = false
 input_format = "unk"
 output_format = "unk"
 
 args = ARGV.select do |arg|
   if arg =~ /^\-v$/
-    verbose = true
+    Cfg.verbose = true
     nil
   elsif arg =~ /^\-i\=(\S+)$/
     input_format = $1
