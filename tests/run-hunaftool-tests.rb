@@ -12,8 +12,10 @@ def run_tests(dir, cmdlines)
     next unless filename =~ /\.aff/i
     dicfile = filename.gsub(/\.aff/i, ".dic")
     txtfile = filename.gsub(/\.aff/i, ".txt")
+    csvfile = filename.gsub(/\.aff/i, ".csv")
     goodfile = filename.gsub(/\.aff/i, ".good")
     goodfiledic = filename.gsub(/\.aff/i, ".good.dic")
+    txtfile = csvfile unless File.exist?(txtfile)
 
     if File.exist?(dicfile) && File.exist?(goodfile)
       # .dic file decoding

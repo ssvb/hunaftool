@@ -591,9 +591,6 @@ class AFF
   # Find all wordforms produced by a stem with a specified set of flags.
   # Each of the matched wordforms is yielded to a block along with the
   # prefix flags and the suffix flags that triggered this match.
-  # Single prefix and single suffix matches are yielded earlier than
-  # the matches for both prefix & suffix together (this property may
-  # be used by the caller).
   #
   # Note: the yilded wordform is in 8-bit encoding and it references to
   #       the internal temporary buffer, which is going to be overwritten!
@@ -652,15 +649,17 @@ class AFF
                 # Check the crossproduct flags to confirm that this prefix can be applied.
                 next unless pfx.cross
                 # Check if we have a match for the necessary affix flags.
-                if (aff_flags_intersect?(flags, pfx.flag) ||
-                    aff_flags_intersect?(sfx.flag2, pfx.flag)) &&
+                direct_pfx_match = aff_flags_intersect?(flags, pfx.flag)
+                sfx_induced_pfx_match = aff_flags_intersect?(sfx.flag2, pfx.flag)
+                if (direct_pfx_match || sfx_induced_pfx_match) &&
                                           (@tmpbuf3.size != pfx.remove_left || @fullstrip)
                   # Apply the current prefix on top of the two already applied suffixes.
                   @tmpbuf2.clear
                   @tmpbuf2.concat(pfx.append_left)
                   (pfx.remove_left ... @tmpbuf3.size).each {|i| @tmpbuf2 << @tmpbuf3[i] }
                   # Yield a wordform constructed from two suffixes and one prefix.
-                  yield @tmpbuf2, pfx.flag, sfx.flag
+                  yield @tmpbuf2, pfx.flag, sfx.flag if direct_pfx_match
+                  yield @tmpbuf2, sfx.flag, sfx.flag if sfx_induced_pfx_match
                 end
               end
             end
@@ -675,15 +674,17 @@ class AFF
           # Check the crossproduct flags to confirm that this prefix can be applied.
           next unless pfx.cross
           # Check if we have a match for the necessary affix flags.
-          if (aff_flags_intersect?(flags, pfx.flag) ||
-              aff_flags_intersect?(sfx.flag2, pfx.flag)) &&
+          direct_pfx_match = aff_flags_intersect?(flags, pfx.flag)
+          sfx_induced_pfx_match = aff_flags_intersect?(sfx.flag2, pfx.flag)
+          if (direct_pfx_match || sfx_induced_pfx_match) &&
                                         (@tmpbuf.size != pfx.remove_left || @fullstrip)
             # Apply the current prefix on top of a single first level suffix.
             @tmpbuf2.clear
             @tmpbuf2.concat(pfx.append_left)
             (pfx.remove_left ... @tmpbuf.size).each {|i| @tmpbuf2 << @tmpbuf[i] }
             # Yield a wordform constructed from one suffix and one prefix.
-            yield @tmpbuf2, pfx.flag, sfx.flag
+            yield @tmpbuf2, pfx.flag, sfx.flag if direct_pfx_match
+            yield @tmpbuf2, sfx.flag, sfx.flag if sfx_induced_pfx_match
           end
         end
       end
@@ -1027,11 +1028,12 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
         if favor_pfx_flags && favor_sfx_flags
           # The "favor prefixes" variant goes to the current slot
           data.flags = favor_pfx_flags
-          # Also a new slot is allocated for the "favor suffixes" variant, but
-          # beware that this requires special care at the "produce output" step
-          data2 = WordData.new(data.encword)
-          data2.flags = favor_sfx_flags
-          idx_to_data.push(data2)
+          # Also a new slot is allocated for the "favor suffixes" variant if it's different
+          if favor_pfx_flags != favor_sfx_flags
+            data2 = WordData.new(data.encword)
+            data2.flags = favor_sfx_flags
+            idx_to_data.push(data2)
+          end
         end
       end
 
