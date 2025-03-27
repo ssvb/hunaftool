@@ -6,7 +6,7 @@
 #             and .DIC files for Hunspell, tailoring them for some
 #             already existing .AFF file.
 
-VERSION = 0.8
+VERSION = 0.9
 
 ###############################################################################
 
@@ -44,11 +44,17 @@ require "benchmark"
 # This is how runing under Crystal can be detected.
 COMPILED_BY_CRYSTAL = (((1 / 2) * 2) != 0)
 
+# Monkey-patch Ruby to make it recognize the Crystal's .to_i128 method
+class Integer def to_i128() to_i end end
+
 # An 8-bit zero constant to hint the use of UInt8 instead of Int32 for Crystal
 U8_0 = "\0".bytes.first
 
 # A 64-bit zero constant to hint the use of Int64 instead of Int32 for Crystal
 I64_0 = (0x3FFFFFFFFFFFFFFF & 0)
+
+# A 128-bit zero constant to hint the use of Int128 instead of Int32 for Crystal
+I128_0 = 0.to_i128
 
 ###############################################################################
 
@@ -157,7 +163,7 @@ module AffFlags
   LONG                      = 2    # "FLAG long" option in the affix file
   NUM                       = 3    # "FLAG num" option in the affix file
 
-  SWITCH_TO_HASH_THRESHOLD  = 63
+  SWITCH_TO_HASH_THRESHOLD  = (COMPILED_BY_CRYSTAL ? 128 : 62)
 
   @@mode                  = UTF8
   @@flagname_s_to_bitpos  = {"A" => 0}.clear
@@ -187,7 +193,7 @@ module AffFlags
   end
 
   def self.bitpos_to_flagname ; @@bitpos_to_flagname end
-  def self.need_hash? ; @@bitpos_to_flagname.size >= SWITCH_TO_HASH_THRESHOLD end
+  def self.need_hash? ; @@bitpos_to_flagname.size > SWITCH_TO_HASH_THRESHOLD end
 
   def self.register_flag(flagname)
     if @@mode == UTF8 && flagname.size > 1
@@ -227,16 +233,16 @@ class String
       tmp.delete(-1)
       tmp
     else
-      tmp = I64_0
+      tmp = I128_0
       case AffFlags.mode when AffFlags::LONG
         STDERR.puts "! The flags field «#{self}» must have an even number of characters." if size.odd?
-        self.scan(/(..)/) { tmp |= ((I64_0 + 1) << AffFlags.flagname_to_bitpos($1, self)) }
+        self.scan(/(..)/) { tmp |= ((I128_0 + 1) << AffFlags.flagname_to_bitpos($1, self)) }
       when AffFlags::NUM then
         unless self.strip.empty?
-          self.split(',').each {|chunk| tmp |= ((I64_0 + 1) << AffFlags.flagname_to_bitpos(chunk.strip, self)) }
+          self.split(',').each {|chunk| tmp |= ((I128_0 + 1) << AffFlags.flagname_to_bitpos(chunk.strip, self)) }
         end
       else
-        self.each_char {|ch| tmp |= ((I64_0 + 1) << AffFlags.flagname_to_bitpos(ch, self)) }
+        self.each_char {|ch| tmp |= ((I128_0 + 1) << AffFlags.flagname_to_bitpos(ch, self)) }
       end
       tmp
     end
@@ -249,7 +255,7 @@ def aff_flags_to_s(flags)
       .join((AffFlags.mode == AffFlags::NUM) ? "," : "")
   else
     AffFlags.bitpos_to_flagname
-      .each_index.select {|idx| (((I64_0 + 1) << idx) & flags) != 0 }
+      .each_index.select {|idx| (((I128_0 + 1) << idx) & flags) != 0 }
       .map {|idx| AffFlags.bitpos_to_flagname[idx] }.to_a.sort
       .join((AffFlags.mode == AffFlags::NUM) ? "," : "")
   end
@@ -317,7 +323,7 @@ end
 
 # That's an affix rule, pretty much in the same format as in .AFF files
 class Rule
-  def initialize(flag = I64_0, flag2 = I64_0, crossproduct = true,
+  def initialize(flag = I128_0, flag2 = I128_0, crossproduct = true,
                  stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
     @flag2 = {0 => true}.clear if AffFlags.need_hash?
@@ -336,7 +342,7 @@ end
 # That's a processed result of matching a rule. It may be adjusted
 # depending on what is the desired result.
 class AffixMatch
-  def initialize(flag = I64_0, flag2 = I64_0, crossproduct = true,
+  def initialize(flag = I128_0, flag2 = I128_0, crossproduct = true,
                  remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes,
                  rawsrc = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
@@ -479,7 +485,7 @@ class AFF
     @prefixes_to_stem   = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_TO_STEM)
     @suffixes_to_stem   = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_TO_STEM)
     @fullstrip = false
-    @virtual_stem_flag = AffFlags.need_hash? ? {0 => true}.clear : I64_0
+    @virtual_stem_flag = AffFlags.need_hash? ? {0 => true}.clear : I128_0
     @virtual_stem_flag = virtual_stem_flag_s.to_aff_flags
     flag = ""
     cnt = 0
@@ -854,7 +860,7 @@ end
 class WordData
   def initialize(encword = "".bytes)
     @encword  = encword
-    @flags    = AffFlags.need_hash? ? {0 => true}.clear : I64_0
+    @flags    = AffFlags.need_hash? ? {0 => true}.clear : I128_0
     @covers   = [0].clear
   end
 
