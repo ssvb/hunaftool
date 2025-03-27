@@ -1,12 +1,12 @@
 #!/usr/bin/env ruby
 # Copyright © 2025 Siarhei Siamashka
-# SPDX-License-Identifier: CC-BY-SA-4.0 OR MIT
+# SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 #
 # hunaftool - automated conversion between plain text word lists
 #             and .DIC files for Hunspell, tailoring them for some
 #             already existing .AFF file.
 
-VERSION = 0.7
+VERSION = 0.8
 
 ###############################################################################
 
@@ -75,7 +75,7 @@ def subtask(caption)
                   footprint.to_f / 1000000)
   else
     t = Benchmark.measure { yield }
-    STDERR.printf("== %s (+%.2f s)\n", caption, t.real)
+    STDERR.printf("== %s (time: +%.2fs)\n", caption, t.real)
   end
   nil
 end
@@ -451,7 +451,7 @@ class AFF
     affdata.each_line do |l|
       if l =~ /^(\s*)FLAG\s+(\S*)/
         unless $1.empty?
-          STDERR.puts "! The FLAG option has suspicious indentation and this makes it inactive."
+          STDERR.puts "! The FLAG option is indented and this makes it inactive."
           next
         end
         case $2
@@ -465,7 +465,7 @@ class AFF
         AffFlags.register_flag($2)
       elsif l =~ /^(\s*)NEEDAFFIX\s+(\S+)$/
         unless $1.empty?
-          STDERR.puts "! The NEEDAFFIX option has suspicious indentation and this makes it inactive."
+          STDERR.puts "! The NEEDAFFIX option is indented and this makes it inactive."
           next
         end
         AffFlags.register_flag(virtual_stem_flag_s = $2)
@@ -473,7 +473,7 @@ class AFF
     end
 
     # The second pass to do the rest
-    @alphabet = Alphabet.new("-" + charlist)
+    @alphabet = Alphabet.new(" " + charlist)
     @prefixes_from_stem = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_FROM_STEM)
     @suffixes_from_stem = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_FROM_STEM)
     @prefixes_to_stem   = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_TO_STEM)
@@ -492,7 +492,10 @@ class AFF
       elsif l =~ /^\s*BREAK\s+(\S+)(.*)$/
         @alphabet.encode_word($1)
       elsif l =~ /^(\s*)FULLSTRIP\s*(\s+.*)?$/
-        raise "Malformed FULLSTRIP directive (indented).\n" unless $1 == ""
+        unless $1.empty?
+          STDERR.puts "! The FULLSTRIP option is indented and this makes it inactive."
+          next
+        end
         @fullstrip = true
       elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\d+)\s*(.*)$/
         type = $1
@@ -536,7 +539,7 @@ class AFF
               STDERR.puts "! ... the condition is equivalent to «#{condition_p1}#{stripping}»."
               condition = condition_p1 + stripping
             else
-              STDERR.puts "! ... the condition is inert."
+              STDERR.puts "! ... the condition is inactive."
               next
             end
           elsif type == "P" && condition =~ /^((\[[^\]\)\(\[]+\]|.){#{stripping.size}})(.*)/
@@ -546,13 +549,13 @@ class AFF
               STDERR.puts "! ... the condition is equivalent to «#{stripping}#{condition_p2}»."
               condition = stripping + condition_p2
             else
-              STDERR.puts "! ... the condition is inert."
+              STDERR.puts "! ... the condition is inactive."
               next
             end
           else raise "" end
           rescue
-            STDERR.puts "! ... can't figure it out and give up."
-            exit 1
+            STDERR.puts "! ... can't figure it out."
+            next
           end
         end
 
@@ -797,17 +800,17 @@ def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_fi
         expected_number_of_stems = $1.to_i
         next
       else
-        STDERR.puts "Malformed .DIC file: the words counter is missing."
+        STDERR.puts "! Malformed .DIC file: the words counter is missing."
         alreadywarned = true
       end
     end
     if expected_number_of_stems != -1 &&
              real_number_of_stems > expected_number_of_stems && !alreadywarned
-      STDERR.puts "Malformed .DIC file: the words counter is too small."
+      STDERR.puts "! Malformed .DIC file: the words counter is too small."
       alreadywarned = true
     end
     if l.empty?
-      STDERR.puts "Malformed .DIC file: an unexpected empty line."
+      STDERR.puts "! Malformed .DIC file: an unexpected empty line."
       alreadywarned = true
     else
       if delimiter
@@ -839,7 +842,7 @@ def convert_dic_to_txt(aff_file, dic_file, delimiter = nil, out_file = nil)
   begin
     try_convert_dic_to_txt("", aff_file, dic_file, delimiter, out_file)
   rescue AlphabetException
-    STDERR.puts "! Please ensure that the whole alphabet is accounted for in the TRY directive."
+    STDERR.puts "! The TRY directive should preferably cover the whole alphabet."
     a1 = alphabet_from_file(aff_file)
     a2 = alphabet_from_file(dic_file)
     try_convert_dic_to_txt(a1 + a2, aff_file, dic_file, delimiter, out_file)
@@ -1141,7 +1144,7 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
   begin
     try_convert_txt_to_dic("", aff_file, txt_file, out_file)
   rescue AlphabetException
-    STDERR.puts "! Please ensure that the TRY directive covers the whole alphabet."
+    STDERR.puts "! The TRY directive should preferably cover the whole alphabet."
     a1 = alphabet_from_file(aff_file)
     a2 = alphabet_from_file(txt_file)
     try_convert_txt_to_dic(a1 + a2, aff_file, txt_file, out_file)
@@ -1308,7 +1311,7 @@ unless args.size >= 1 && args[0] =~ /\.aff$/i
   puts "hunaftool v#{VERSION} - automated conversion between plain text word lists"
   puts "                 and .DIC files for Hunspell, tailoring them for some"
   puts "                 already existing .AFF file with affixes."
-  puts "Copyright © 2025 Siarhei Siamashka. License: CC BY-SA 4.0 or MIT."
+  puts "Copyright © 2025 Siarhei Siamashka. License: CC-BY-SA or MIT."
   puts
   puts "Usage: hunaftool [options] <whatever.aff> [input_file] [output_file]"
   puts "Where options can be:"
@@ -1322,13 +1325,13 @@ unless args.size >= 1 && args[0] =~ /\.aff$/i
   puts "                             * dic - a .DIC file from Hunspell"
   puts
   puts "  -o=[dic|txt|csv|js|lua] : the desired output file format:"
-  puts "                             * txt - text file with one word per line,"
-  puts "                                     all words are unique and presented"
-  puts "                                     in a sorted order."
+  puts "                             * txt - text file with one word per line, all"
+  puts "                                     words are unique and presented in a"
+  puts "                                     sorted order (per LC_ALL=C locale)."
   puts "                             * csv - text file with one stem per line,"
-  puts "                                     each of them followed by the comma"
-  puts "                                     separated words that had been derived"
-  puts "                                     from it via applying affixes."
+  puts "                                     each followed by the comma separated"
+  puts "                                     words derived from that stem via"
+  puts "                                     applying affixes."
   puts "                             * dic - a .DIC file for Hunspell"
   puts "                             * js  - JavaScript code (TODO)"
   puts "                             * lua - Lua code (TODO)"
