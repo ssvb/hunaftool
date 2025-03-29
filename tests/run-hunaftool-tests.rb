@@ -14,16 +14,19 @@ def run_tests(dir, cmdlines)
     txtfile = filename.gsub(/\.aff/i, ".txt")
     csvfile = filename.gsub(/\.aff/i, ".csv")
     goodfile = filename.gsub(/\.aff/i, ".good")
+    goodfilecsv = filename.gsub(/\.aff/i, ".good.csv")
     goodfiledic = filename.gsub(/\.aff/i, ".good.dic")
     txtfile = csvfile unless File.exist?(txtfile)
+    goodfile = goodfilecsv unless File.exist?(goodfile)
 
     if File.exist?(dicfile) && File.exist?(goodfile)
       # .dic file decoding
+      fmt = File.exist?(goodfilecsv) ? "csv" : "txt"
       cmdlines.each do |cmdline|
-        result = `#{cmdline} -o=txt #{filename} #{dicfile}`.lines.map {|l| l.strip }.sort
+        result = `#{cmdline} -o=#{fmt} #{filename} #{dicfile}`.lines.map {|l| l.strip }.sort
         expected = File.read(goodfile).lines.map {|l| l.strip }.sort
         if result != expected
-          STDERR.puts "\n== Test «#{cmdline} -o=txt #{filename} #{dicfile}» failed:"
+          STDERR.puts "\n== Test «#{cmdline} -o=#{fmt} #{filename} #{dicfile}» failed:"
           STDERR.puts "== Expected: =="
           STDERR.puts expected.join("\n")
           STDERR.puts "== Got ==:"
