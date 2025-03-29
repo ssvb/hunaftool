@@ -324,11 +324,11 @@ end
 # That's an affix rule, pretty much in the same format as in .AFF files
 class Rule
   def initialize(flag = I128_0, flag2 = I128_0, crossproduct = true,
-                 stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "")
+                 stripping = "".bytes, affix = "".bytes, condition = "", rawsrc = "", tags = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
     @flag2 = {0 => true}.clear if AffFlags.need_hash?
-    @flag, @flag2, @crossproduct, @stripping, @affix, @condition, @rawsrc =
-      flag, flag2, crossproduct, stripping, affix, condition, rawsrc
+    @flag, @flag2, @crossproduct, @stripping, @affix, @condition, @rawsrc, @tags =
+      flag, flag2, crossproduct, stripping, affix, condition, rawsrc, tags
   end
   def flag       ; @flag      end
   def flag2      ; @flag2     end
@@ -337,6 +337,7 @@ class Rule
   def affix      ; @affix     end
   def condition  ; @condition end
   def rawsrc     ; @rawsrc    end
+  def tags       ; @tags      end
 end
 
 # That's a processed result of matching a rule. It may be adjusted
@@ -344,11 +345,11 @@ end
 class AffixMatch
   def initialize(flag = I128_0, flag2 = I128_0, crossproduct = true,
                  remove_left = 0, append_left = "".bytes, remove_right = 0, append_right = "".bytes,
-                 rawsrc = "")
+                 rawsrc = "", tags = "")
     @flag = {0 => true}.clear if AffFlags.need_hash?
     @flag2 = {0 => true}.clear if AffFlags.need_hash?
-    @flag, @flag2, @crossproduct, @remove_left, @append_left, @remove_right, @append_right, @rawsrc =
-      flag, flag2, crossproduct, remove_left, append_left, remove_right, append_right, rawsrc
+    @flag, @flag2, @crossproduct, @remove_left, @append_left, @remove_right, @append_right, @rawsrc, @tags =
+      flag, flag2, crossproduct, remove_left, append_left, remove_right, append_right, rawsrc, tags
   end
   def flag         ; @flag               end
   def flag2        ; @flag2              end
@@ -403,22 +404,22 @@ class Ruleset
     if prefix? && to_stem?
       condition = rule.affix.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
-                             rule.affix.size, rule.stripping, 0, "".bytes, rule.rawsrc)
+                             rule.affix.size, rule.stripping, 0, "".bytes, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
     elsif prefix? && from_stem?
       condition = rule.stripping.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
-                             rule.stripping.size, rule.affix, 0, "".bytes, rule.rawsrc)
+                             rule.stripping.size, rule.affix, 0, "".bytes, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && to_stem?
       condition = (parse_condition(@alphabet, rule.condition) + rule.affix.map {|x| [x]}).reverse
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
-                             0, "".bytes, rule.affix.size, rule.stripping, rule.rawsrc)
+                             0, "".bytes, rule.affix.size, rule.stripping, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && from_stem?
       condition = (parse_condition(@alphabet, rule.condition) + rule.stripping.map {|x| [x]}).reverse
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
-                             0, "".bytes, rule.stripping.size, rule.affix, rule.rawsrc)
+                             0, "".bytes, rule.stripping.size, rule.affix, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
     end
   end
@@ -509,7 +510,7 @@ class AFF
           next
         end
         @fullstrip = true
-      elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\d+)\s*(.*)$/
+      elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\d+)(\s|$)/
         type = $1
         flag = $2
         case $3 when "Y" then crossproduct = true
@@ -520,19 +521,23 @@ class AFF
         end
         cnt = $4.to_i
         @alphabet.finalized_size
-      elsif l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/
+      elsif l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s*(\S*)\s*([^#]*)/
         type = $1
         unless flag == $2
-          STDERR.puts "! Invalid rule (flag mismatch): #{l}"
+          STDERR.puts "! Fatal error. Invalid rule (flag mismatch): «#{l.strip}»"
           exit 1
         end
-          if (cnt -= 1) < 0
-          STDERR.puts "! Invalid rule (wrong counter): #{l}"
+        if (cnt -= 1) < 0
+          STDERR.puts "! Fatal error. Invalid rule (wrong counter): «#{l.strip}»"
           exit 1
         end
         stripping = ($3 == "0" ? "" : $3)
         affix     = ($4 == "0" ? "" : $4)
-        condition = ($5 == "." ? stripping : $5)
+        condition = (($5 != "" && $5 != ".") ? $5 : stripping)
+        tags      = $6.strip
+        if $5 == ""
+          STDERR.puts "! No condition field in «#{l.strip}», default to «.» or «#{stripping}»"
+        end
 
         # Check the condition field for sanity.
         # FIXME: it would be nice to escape regular expressions here
@@ -578,7 +583,7 @@ class AFF
         affix = "" if affix == "0"
         rule = Rule.new(flag.to_aff_flags, flag2.to_aff_flags, crossproduct,
                         @alphabet.encode_word(stripping),
-                        @alphabet.encode_word(affix), condition, l.strip)
+                        @alphabet.encode_word(affix), condition, l.strip, tags)
         if type == "S"
           @suffixes_from_stem.add_rule(rule)
           @suffixes_to_stem.add_rule(rule)
