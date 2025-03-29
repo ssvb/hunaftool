@@ -452,6 +452,7 @@ class AFF
     affdata = (((opt & RULESET_TESTSTRING) != 0) ? aff_file
                                                  : File.read(aff_file))
     virtual_stem_flag_s = ""
+    forbiddenword_flag_s = ""
     AffFlags.mode = AffFlags::UTF8
     # The first pass to count the number of flags
     affdata.each_line do |l|
@@ -469,12 +470,15 @@ class AFF
           end
       elsif l =~ /^([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$/
         AffFlags.register_flag($2)
-      elsif l =~ /^(\s*)NEEDAFFIX\s+(\S+)$/
+      elsif l =~ /^(\s*)(NEEDAFFIX|FORBIDDENWORD)\s+(\S+)$/
         unless $1.empty?
           STDERR.puts "! The NEEDAFFIX option is indented and this makes it inactive."
           next
         end
-        AffFlags.register_flag(virtual_stem_flag_s = $2)
+        case $2
+          when "NEEDAFFIX" then AffFlags.register_flag(virtual_stem_flag_s = $3)
+          when "FORBIDDENWORD" then AffFlags.register_flag(forbiddenword_flag_s = $3)
+        end
       end
     end
 
@@ -485,8 +489,10 @@ class AFF
     @prefixes_to_stem   = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_TO_STEM)
     @suffixes_to_stem   = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_TO_STEM)
     @fullstrip = false
-    @virtual_stem_flag = AffFlags.need_hash? ? {0 => true}.clear : I128_0
-    @virtual_stem_flag = virtual_stem_flag_s.to_aff_flags
+    @virtual_stem_flag  = AffFlags.need_hash? ? {0 => true}.clear : I128_0
+    @virtual_stem_flag  = virtual_stem_flag_s.to_aff_flags
+    @forbiddenword_flag = AffFlags.need_hash? ? {0 => true}.clear : I128_0
+    @forbiddenword_flag = forbiddenword_flag_s.to_aff_flags
     flag = ""
     cnt = 0
     crossproduct = false
@@ -596,6 +602,7 @@ class AFF
   def suffixes_to_stem   ; @suffixes_to_stem end
   def fullstrip?         ; @fullstrip end
   def virtual_stem_flag  ; @virtual_stem_flag end
+  def forbiddenword_flag ; @forbiddenword_flag end
 
   # Find all wordforms produced by a stem with a specified set of flags.
   # Each of the matched wordforms is yielded to a block along with the
@@ -606,9 +613,12 @@ class AFF
   #       If this wordform needs to be stored somewhere, then a copy needs
   #       to be allocated via the .dup method.
   def expand_stem(stem, flags)
+    # The FORBIDDENWORD flag applies to all wordforms generated from this stem
+    forbidden = aff_flags_intersect?(flags, @forbiddenword_flag)
+
     # The stem itself is a wordform too (unless it's a virtual stem
     # specifically labelled by the NEEDAFFIX flag).
-    yield stem, nil, nil unless aff_flags_intersect?(flags, @virtual_stem_flag)
+    yield stem, nil, nil, forbidden unless aff_flags_intersect?(flags, @virtual_stem_flag)
 
     # Iterate over all single prefixes.
     prefixes_from_stem.matched_rules(stem) do |pfx|
@@ -619,7 +629,7 @@ class AFF
         @tmpbuf.concat(pfx.append_left)
         (pfx.remove_left ... stem.size).each {|i| @tmpbuf << stem[i] }
         # Yield a wordform constructed from the current single prefix.
-        yield @tmpbuf, pfx.flag, nil
+        yield @tmpbuf, pfx.flag, nil, forbidden
       end
     end
 
@@ -628,6 +638,8 @@ class AFF
       # Check if we have a match for the necessary affix flags.
       if aff_flags_intersect?(flags, sfx.flag) &&
                                         (stem.size != sfx.remove_right || @fullstrip)
+        # One more opportunity to activate the FORBIDDENWORD flag is here
+        forbidden2 = forbidden || aff_flags_intersect?(sfx.flag2, @forbiddenword_flag)
         # Apply the current first level suffix.
         @tmpbuf.clear
         (0 ... stem.size - sfx.remove_right).each {|i| @tmpbuf << stem[i] }
@@ -635,7 +647,7 @@ class AFF
         # Yield a wordform constructed from the current single suffix. But this suffix may
         # have the NEEDAFFIX flag attached to it, which would means that it's not a real
         # wordform (the second level suffix is necessary).
-        yield @tmpbuf, nil, sfx.flag unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
+        yield @tmpbuf, nil, sfx.flag, forbidden2 unless aff_flags_intersect?(sfx.flag2, @virtual_stem_flag)
 
         unless aff_flags_empty?(sfx.flag2)
           # Iterate over all second level suffixes.
@@ -648,7 +660,7 @@ class AFF
               (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
               @tmpbuf3.concat(sfx2.append_right)
               # Yield a wordform constructed from two suffixes.
-              yield @tmpbuf3, nil, sfx.flag
+              yield @tmpbuf3, nil, sfx.flag, forbidden2
 
               # If no cross product support on the suffix side, then we are done
               next unless sfx.cross && sfx2.cross
@@ -667,8 +679,8 @@ class AFF
                   @tmpbuf2.concat(pfx.append_left)
                   (pfx.remove_left ... @tmpbuf3.size).each {|i| @tmpbuf2 << @tmpbuf3[i] }
                   # Yield a wordform constructed from two suffixes and one prefix.
-                  yield @tmpbuf2, pfx.flag, sfx.flag if direct_pfx_match
-                  yield @tmpbuf2, sfx.flag, sfx.flag if sfx_induced_pfx_match
+                  yield @tmpbuf2, pfx.flag, sfx.flag, forbidden2 if direct_pfx_match
+                  yield @tmpbuf2, sfx.flag, sfx.flag, forbidden2 if sfx_induced_pfx_match
                 end
               end
             end
@@ -692,8 +704,8 @@ class AFF
             @tmpbuf2.concat(pfx.append_left)
             (pfx.remove_left ... @tmpbuf.size).each {|i| @tmpbuf2 << @tmpbuf[i] }
             # Yield a wordform constructed from one suffix and one prefix.
-            yield @tmpbuf2, pfx.flag, sfx.flag if direct_pfx_match
-            yield @tmpbuf2, sfx.flag, sfx.flag if sfx_induced_pfx_match
+            yield @tmpbuf2, pfx.flag, sfx.flag, forbidden if direct_pfx_match
+            yield @tmpbuf2, sfx.flag, sfx.flag, forbidden if sfx_induced_pfx_match
           end
         end
       end
@@ -701,14 +713,18 @@ class AFF
   end
 
   def decode_dic_entry(line)
+    stem = ""
     if line =~ /^([^\/]+)\/?(\S*)/
       stem_field, flags_field = $~.captures
       word = @alphabet.encode_word((stem_field || "").strip)
       flags = (flags_field || "").to_aff_flags
-      expand_stem(word, flags) do |wordform, pfx_flag, sfx_flag|
-        yield @alphabet.decode_word(wordform)
+      expand_stem(word, flags) do |wordform, pfx_flag, sfx_flag, forbidden|
+        wordform_utf8 = @alphabet.decode_word(wordform)
+        stem = wordform_utf8 if !pfx_flag && !sfx_flag
+        yield wordform_utf8, forbidden
       end
     end
+    stem
   end
 
   # This is the opposite of "expand_stem". Given a wordform, this function probes
@@ -791,9 +807,11 @@ end
 
 def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_file = nil)
   aff = AFF.new(aff_file, alphabet)
-  wordlist = {"" => true}.clear
-  stemwordlist = {"" => true}.clear
-  firstline = true
+  badlist       = {"" => true}.clear
+  results       = [[""]].clear
+  results_filt  = [[""]].clear
+  stemwordlist  = {"" => true}.clear
+  firstline     = true
   alreadywarned = false
 
   real_number_of_stems = 0
@@ -821,26 +839,59 @@ def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_fi
     else
       if delimiter
         stemwordlist.clear
-        aff.decode_dic_entry(l) {|word| stemwordlist[word] = true }
-        if l =~ /^\s*([^\/\s]+)/ && stemwordlist.size > 1 && stemwordlist.has_key?($1)
-          stemwordlist.delete($1)
-          wordlist[$1 + delimiter + stemwordlist.keys.sort.join(delimiter)] = true
+        stem = aff.decode_dic_entry(l) do |word, forbidden|
+          badlist[word] = true if forbidden
+          stemwordlist[word] = true
+        end
+        unless stem.empty?
+          results.push(stemwordlist.keys)
         else
-          stemwordlist.each_key {|word| wordlist[word] = true }
+          stemwordlist.each_key {|word| results.push([word]) }
         end
       else
-        aff.decode_dic_entry(l) {|word| wordlist[word] = true }
+        aff.decode_dic_entry(l) do |word, forbidden|
+          badlist[word] = true if forbidden
+          results.push([word])
+        end
       end
       real_number_of_stems += 1
     end
   end
 
+  # Filter out bad words
+  results.each do |a|
+    next if a.empty?
+    stemword = a.first
+    tmp = a.select {|word| !badlist.has_key?(word) }
+    next if tmp.empty?
+    if tmp.first == stemword
+      results_filt.push(tmp)
+    else
+      tmp.each {|v| results_filt.push([v]) }
+    end
+  end
+
+  results = [""].clear
+  if delimiter
+    results_filt.each do |a|
+      if a.size > 1
+        stem = a.shift
+        results.push(stem + delimiter + a.sort.join(delimiter))
+      else
+        results.push(a.join(delimiter))
+      end
+    end
+    results = results.sort.uniq
+  else
+    results = results_filt.flatten.sort.uniq
+  end
+
   if out_file
     fh = File.open(out_file, "w")
-    wordlist.keys.sort.each {|word| fh.puts word }
+    results.each {|a| fh.puts a }
     fh.close
   else
-    wordlist.keys.sort.each {|word| puts word }
+    results.each {|a| puts a }
   end
 end
 
@@ -896,7 +947,8 @@ def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
   # prefix+suffix pairs are handled as separate entities. Moreover,
   # the cross product settings may forbid or allow combining prefixes
   # with suffixes.
-  aff.expand_stem(stem, flags) do |wordform, pfx_flag, sfx_flag|
+  aff.expand_stem(stem, flags) do |wordform, pfx_flag, sfx_flag, forbidden|
+    next if forbidden
     # The caller filters the wordforms and we keep only those that are really useful.
     next unless (yield wordform)
     wordform_dup = wordform.dup
@@ -1003,8 +1055,10 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
       # Going from stems to the wordforms that they produce, identify and
       # remove all invalid flags. First do this for single prefixes and
       # for single suffixes independently from each other.
-      aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
-        if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+      aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag, forbidden|
+        tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)
+        if (!forbidden && (tmpidx >= virtual_stem_area_begin)) ||
+            (forbidden && (tmpidx < virtual_stem_area_begin))
           if pfx_flag && sfx_flag
             problematic_combined_pfx_sfx = true
           elsif pfx_flag
@@ -1024,8 +1078,10 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
         # many permutations, but let's keep things simple.
         favor_pfx_flags = nil
         favor_sfx_flags = nil
-        aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
-          if encword_to_idx.fetch(wordform, virtual_stem_area_begin) >= virtual_stem_area_begin
+        aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag, forbidden|
+          tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)
+          if (!forbidden && (tmpidx >= virtual_stem_area_begin)) ||
+              (forbidden && (tmpidx < virtual_stem_area_begin))
             if pfx_flag && sfx_flag
               favor_pfx_flags = aff_flags_delete!(favor_pfx_flags || data.flags.dup, sfx_flag)
               favor_sfx_flags = aff_flags_delete!(favor_sfx_flags || data.flags.dup, pfx_flag)
@@ -1049,7 +1105,8 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
       # Now that all flags are valid, retrive the full list of words that can
       # be generated from this stem
       tmp_covers.clear
-      aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag|
+      aff.expand_stem(data.encword, data.flags) do |wordform, pfx_flag, sfx_flag, forbidden|
+        next if forbidden
         if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
           tmp_covers.add(tmpidx)
 
