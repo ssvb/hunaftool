@@ -1,0 +1,13 @@
+SET UTF-8
+TRY bacxylforz
+FORBIDDENWORD !
+PFX P Y 3
+PFX P 0 a .
+PFX P 0 b .
+PFX P 0 c .
+SFX S Y 3
+SFX S 0 x .
+SFX S 0 y .
+SFX S 0 z .
+SFX L Y 1
+SFX L 0 lalala/PS! .
