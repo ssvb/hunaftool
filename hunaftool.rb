@@ -97,39 +97,49 @@ end
 class AlphabetException < Exception
 end
 
-class Alphabet
-  def initialize(charlist = "")
-    @char_to_idx = {'a' => U8_0}.clear
-    @idx_to_char = ['a'].clear
-    @finalized   = false
-    encode_word(charlist)
+module Alphabet
+  @@char_to_idx = {'a' => U8_0}.clear
+  @@idx_to_char = ['a'].clear
+  @@finalized   = false
+
+  def self.reset(characters)
+    @@char_to_idx = {'a' => U8_0}.clear
+    @@idx_to_char = ['a'].clear
+    @@finalized   = false
+    characters.to_8bit
   end
 
-  def finalized_size
-    @finalized = true
-    @idx_to_char.size
+  def self.finalized_size
+    @@finalized = true
+    @@idx_to_char.size
   end
 
-  # Convert an UTF-8 string to a 8-bit array
-  def encode_word(word)
+  def self.idx_to_char ; @@idx_to_char end
+  def self.char_to_idx ; @@char_to_idx end
+  def self.finalized   ; @@finalized   end
+end
+
+class String
+  def to_8bit
     out = "".bytes
-    word.each_char do |ch|
-      unless @char_to_idx.has_key?(ch)
-        if @finalized
-          STDERR.puts "! An unexpected character «#{ch}» encountered while processing «#{word}»."
+    self.each_char do |ch|
+      unless Alphabet.char_to_idx.has_key?(ch)
+        if Alphabet.finalized
+          STDERR.puts "! An unexpected character «#{ch}» encountered while processing «#{self}»."
           raise AlphabetException.new
         end
-        @char_to_idx[ch] = U8_0 + @idx_to_char.size
-        @idx_to_char << ch
+        Alphabet.char_to_idx[ch] = U8_0 + Alphabet.idx_to_char.size
+        Alphabet.idx_to_char << ch
       end
-      out << @char_to_idx[ch]
+      out << Alphabet.char_to_idx[ch]
     end
     out
   end
+end
 
-  # Convert a 8-bit array back to an UTF-8 string
-  def decode_word(word)
-    word.map {|idx| @idx_to_char[idx] }.join
+class Array
+  def to_utf8
+    self.map {|idx| Alphabet.idx_to_char[idx] }.join
   end
 end
 
@@ -304,18 +314,18 @@ end
 
 ###############################################################################
 
-def parse_condition(alphabet, condition)
+def parse_condition(condition)
   out = ["".bytes].clear
   condition.scan(/\[\^([^\]]*)\]|\[([^\]\^]*)\]|(.)/) do
     m1, m2, m3 = $~.captures
     out << if m1
       tmp = {0 => true}.clear
-      alphabet.encode_word(m1).each {|idx| tmp[idx] = true }
-      alphabet.finalized_size.times.map {|x| U8_0 + x }.select {|idx| !tmp.has_key?(idx) }.to_a
+      m1.to_8bit.each {|idx| tmp[idx] = true }
+      Alphabet.finalized_size.times.map {|x| U8_0 + x }.select {|idx| !tmp.has_key?(idx) }.to_a
     elsif m2
-      alphabet.encode_word(m2).sort.uniq
+      m2.to_8bit.sort.uniq
     else
-      alphabet.encode_word(m3.to_s)
+      m3.to_s.to_8bit
     end
   end
   out
@@ -370,8 +380,7 @@ RULESET_TESTSTRING = 4
 
 # This is a https://en.wikipedia.org/wiki/Trie data structure for efficient search
 class Ruleset
-  def initialize(alphabet, opts = 0)
-    @alphabet = (alphabet ? alphabet : Alphabet.new)
+  def initialize(opts = 0)
     @opts     = opts
     @rules    = [AffixMatch.new].clear
     @children = [self, nil].clear
@@ -392,9 +401,9 @@ class Ruleset
     else
       condition[condition_idx].each do |ch_idx|
         return unless trie_node && (children = trie_node.children)
-        trie_node.children = [nil] * @alphabet.finalized_size + [self] if children.empty?
+        trie_node.children = [nil] * Alphabet.finalized_size + [self] if children.empty?
         return unless children = trie_node.children
-        children[ch_idx] = Ruleset.new(@alphabet) unless children[ch_idx]
+        children[ch_idx] = Ruleset.new unless children[ch_idx]
         add_rule_imp(children[ch_idx], rule, condition, condition_idx + 1)
       end
     end
@@ -402,22 +411,22 @@ class Ruleset
 
   def add_rule(rule)
     if prefix? && to_stem?
-      condition = rule.affix.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
+      condition = rule.affix.map {|x| [x]} + parse_condition(rule.condition)
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
                              rule.affix.size, rule.stripping, 0, "".bytes, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
     elsif prefix? && from_stem?
-      condition = rule.stripping.map {|x| [x]} + parse_condition(@alphabet, rule.condition)
+      condition = rule.stripping.map {|x| [x]} + parse_condition(rule.condition)
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
                              rule.stripping.size, rule.affix, 0, "".bytes, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && to_stem?
-      condition = (parse_condition(@alphabet, rule.condition) + rule.affix.map {|x| [x]}).reverse
+      condition = (parse_condition(rule.condition) + rule.affix.map {|x| [x]}).reverse
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
                              0, "".bytes, rule.affix.size, rule.stripping, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
     elsif suffix? && from_stem?
-      condition = (parse_condition(@alphabet, rule.condition) + rule.stripping.map {|x| [x]}).reverse
+      condition = (parse_condition(rule.condition) + rule.stripping.map {|x| [x]}).reverse
       match = AffixMatch.new(rule.flag, rule.flag2, rule.cross,
                              0, "".bytes, rule.stripping.size, rule.affix, rule.rawsrc, rule.tags)
       add_rule_imp(self, match, condition, 0)
@@ -484,11 +493,11 @@ class AFF
     end
 
     # The second pass to do the rest
-    @alphabet = Alphabet.new(" " + charlist)
-    @prefixes_from_stem = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_FROM_STEM)
-    @suffixes_from_stem = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_FROM_STEM)
-    @prefixes_to_stem   = Ruleset.new(@alphabet, RULESET_PREFIX + RULESET_TO_STEM)
-    @suffixes_to_stem   = Ruleset.new(@alphabet, RULESET_SUFFIX + RULESET_TO_STEM)
+    Alphabet.reset(" " + charlist)
+    @prefixes_from_stem = Ruleset.new(RULESET_PREFIX + RULESET_FROM_STEM)
+    @suffixes_from_stem = Ruleset.new(RULESET_SUFFIX + RULESET_FROM_STEM)
+    @prefixes_to_stem   = Ruleset.new(RULESET_PREFIX + RULESET_TO_STEM)
+    @suffixes_to_stem   = Ruleset.new(RULESET_SUFFIX + RULESET_TO_STEM)
     @fullstrip = false
     @virtual_stem_flag  = AffFlags.need_hash? ? {0 => true}.clear : I128_0
     @virtual_stem_flag  = virtual_stem_flag_s.to_aff_flags
@@ -499,11 +508,11 @@ class AFF
     crossproduct = false
     affdata.each_line do |l|
       if l =~ /^\s*TRY\s+(\S+)(.*)$/
-        @alphabet.encode_word($1)
+        $1.to_8bit
       elsif l =~ /^\s*WORDCHARS\s+(\S+)(.*)$/
-        @alphabet.encode_word($1)
+        $1.to_8bit
       elsif l =~ /^\s*BREAK\s+(\S+)(.*)$/
-        @alphabet.encode_word($1)
+        $1.to_8bit
       elsif l =~ /^(\s*)FULLSTRIP\s*(\s+.*)?$/
         unless $1.empty?
           STDERR.puts "! The FULLSTRIP option is indented and this makes it inactive."
@@ -520,7 +529,7 @@ class AFF
           crossproduct = false
         end
         cnt = $4.to_i
-        @alphabet.finalized_size
+        Alphabet.finalized_size
       elsif l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\S+)\s*(\S*)\s*([^#]*)/
         type = $1
         unless flag == $2
@@ -582,8 +591,7 @@ class AFF
         affix = affix.gsub(/\/\S+$/, "")
         affix = "" if affix == "0"
         rule = Rule.new(flag.to_aff_flags, flag2.to_aff_flags, crossproduct,
-                        @alphabet.encode_word(stripping),
-                        @alphabet.encode_word(affix), condition, l.strip, tags)
+                        stripping.to_8bit, affix.to_8bit, condition, l.strip, tags)
         if type == "S"
           @suffixes_from_stem.add_rule(rule)
           @suffixes_to_stem.add_rule(rule)
@@ -600,7 +608,6 @@ class AFF
     @tmpbuf3 = "".bytes
   end
 
-  def alphabet           ; @alphabet end
   def prefixes_from_stem ; @prefixes_from_stem end
   def suffixes_from_stem ; @suffixes_from_stem end
   def prefixes_to_stem   ; @prefixes_to_stem end
@@ -720,11 +727,8 @@ class AFF
   def decode_dic_entry(line)
     stem = ""
     if line =~ /^([^\/]+)\/?(\S*)/
-      stem_field, flags_field = $~.captures
-      word = @alphabet.encode_word((stem_field || "").strip)
-      flags = (flags_field || "").to_aff_flags
-      expand_stem(word, flags) do |wordform, pfx_flag, sfx_flag, forbidden|
-        wordform_utf8 = @alphabet.decode_word(wordform)
+      expand_stem($1.strip.to_8bit, $2.to_aff_flags) do |wordform, pfx_flag, sfx_flag, forbidden|
+        wordform_utf8 = wordform.to_utf8
         stem = wordform_utf8 if !pfx_flag && !sfx_flag
         yield wordform_utf8, forbidden
       end
@@ -1012,7 +1016,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
       line.split(/[\,\|]/).each do |word|
         word = word.strip
         next if word.empty?
-        encword = aff.alphabet.encode_word(word)
+        encword = word.to_8bit
         next if encword_to_idx.has_key?(encword)
         encword_to_idx[encword] = idx_to_data.size
         idx_to_data.push(WordData.new(encword))
@@ -1177,7 +1181,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
       # Flags optimization may result in an empty set of flags too.
       if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1) &&
                                   !aff_flags_empty?(data.flags)
-        final_result[aff.alphabet.decode_word(data.encword) +
+        final_result[data.encword.to_utf8 +
           "/" + aff_flags_to_s(data.flags) + (stem_is_virtual ?
                 aff_flags_to_s(aff.virtual_stem_flag) : "")] = true
         # remove the result from the TODO list
@@ -1190,7 +1194,7 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     todo.each_index do |idx|
       if todo[idx]
         data = idx_to_data[idx]
-        final_result[aff.alphabet.decode_word(data.encword)] = true
+        final_result[data.encword.to_utf8] = true
       end
     end
   end
