@@ -98,9 +98,10 @@ class AlphabetException < Exception
 end
 
 module Alphabet
-  @@char_to_idx = {'a' => U8_0}.clear
-  @@idx_to_char = ['a'].clear
-  @@finalized   = false
+  @@char_to_idx   = {'a' => U8_0}.clear
+  @@idx_to_char   = ['a'].clear
+  @@idx_to_weight = [[0, 0, 0]].clear
+  @@finalized     = false
 
   def self.reset(characters)
     @@char_to_idx = {'a' => U8_0}.clear
@@ -114,9 +115,47 @@ module Alphabet
     @@idx_to_char.size
   end
 
-  def self.idx_to_char ; @@idx_to_char end
-  def self.char_to_idx ; @@char_to_idx end
-  def self.finalized   ; @@finalized   end
+  def self.idx_to_char   ; @@idx_to_char end
+  def self.idx_to_weight ; @@idx_to_weight end
+  def self.char_to_idx   ; @@char_to_idx end
+  def self.finalized     ; @@finalized   end
+
+  # Since Ruby doesn't support the Unicode Collation Algorithm (UCA) out of the box,
+  # this is a simplified partial placeholder implementation, which only focuses on
+  # the European languages rather than trying to handle everything. The list of
+  # characters relevant for the European languages had been taken from
+  #     https://www.open-std.org/cen/tc304/EOR/eor4r_tab.txt
+  # Then these characters were found in https://www.unicode.org/Public/UCA/16.0.0/allkeys.txt
+  # and presented here as strings. The L2 weights are all identical for these characters
+  # in DUCET, so processing of L2 is skipped entirely here.
+  @@euroducet_base =
+    "¤¢$£¥₣₤€₯0123456789abcdeəfƒgǥhʻʽiıjklmnŋopqĸrɼstŧuvwxyzʒþʼˮαβγδεϝϛζηθικλμνξοπϟρσ" +
+    "τυφχψωϡаәӕбвгғҕдђҙеєжҗзѕӡиійјкқӄҡҟҝлљмнңӈҥњоөпҧрсҫтҭћуүұфхҳһцҵчҷӌҹҽҿџшщъыьэюяҩӀ"
+  @@euroducet_all =
+    "¤¢$£¥₣₤€₯01¹½¼⅛2²₂3³¾⅜45⅝67⅞89aAªáÁàÀăĂâÂåÅǻǺäÄǟǞãÃǡǠąĄāĀæÆǽǼǣǢbBḃḂcCćĆĉĈčČċĊçÇ℅" +
+    "dDďĎḋḊđĐðÐeEéÉèÈĕĔêÊěĚëËėĖęĘēĒəƏfFḟḞﬁﬂƒgGğĞĝĜǧǦġĠģĢǥǤhHĥĤȟȞħĦʻʽiIíÍìÌĭĬîÎïÏĩĨİįĮ" +
+    "īĪĳĲıjJĵĴkKǩǨķĶlLĺĹľĽļĻłŁŀĿmMṁṀnNⁿńŃňŇñÑņŅ№ŋŊoOºóÓòÒŏŎôÔöÖőŐõÕøØǿǾǫǪǭǬōŌœŒpPṗṖ₧q" +
+    "QĸrRŕŔřŘŗŖɼsSśŚŝŜšŠṡṠşŞșȘſẛßtTťŤṫṪţŢțȚ™ŧŦuUúÚùÙŭŬûÛůŮüÜűŰũŨųŲūŪvVwWẃẂẁẀŵŴẅẄxXyYý" +
+    "ÝỳỲŷŶÿŸzZźŹžŽżŻʒƷǯǮþÞʼŉˮαΑἀἈἄἌᾄᾌἂἊᾂᾊἆἎᾆᾎᾀᾈἁἉἅἍᾅᾍἃἋᾃᾋἇἏᾇᾏᾁᾉάάΆΆᾴὰᾺᾲᾰᾸᾶᾷᾱᾹᾳᾼβϐΒγΓδ" +
+    "ΔεΕἐἘἔἜἒἚἑἙἕἝἓἛέέΈΈὲῈϝϜϛϚζΖηΗἠἨἤἬᾔᾜἢἪᾒᾚἦἮᾖᾞᾐᾘἡἩἥἭᾕᾝἣἫᾓᾛἧἯᾗᾟᾑᾙήήΉΉῄὴῊῂῆῇῃῌθϑΘιιΙἰ" +
+    "ἸἴἼἲἺἶἾἱἹἵἽἳἻἷἿίίΊΊὶῚῐῘῖϊΪΐΐῒῗῑῙκϰΚϗλΛμµΜνΝξΞοΟὀὈὄὌὂὊὁὉὅὍὃὋόόΌΌὸῸπϖΠϟϞρϱΡῤῥῬσΣςτ" +
+    "ΤυΥὐὔὒὖὑὙὕὝὓὛὗὟύύΎΎὺῪῠῨῦϋΫΰΰῢῧῡῩφϕΦχΧψΨωΩΩὠὨὤὬᾤᾬὢὪᾢᾪὦὮᾦᾮᾠᾨὡὩὥὭᾥᾭὣὫᾣᾫὧὯᾧᾯᾡᾩώώΏΏῴὼ" +
+    "ῺῲῶῷῳῼϡϠаАӑӐӓӒәӘӛӚӕӔбБвВгГѓЃґҐғҒҕҔдДђЂҙҘеЕѐЀӗӖёЁєЄжЖӂӁӝӜҗҖзЗӟӞѕЅӡӠиИѝЍӥӤӣӢіІїЇйЙ" +
+    "јЈкКќЌқҚӄӃҡҠҟҞҝҜлЛљЉмМнНңҢӈӇҥҤњЊоОӧӦөӨӫӪпПҧҦрРсСҫҪтТҭҬћЋуУўЎӱӰӳӲӯӮүҮұҰфФхХҳҲһҺцЦ" +
+    "ҵҴчЧӵӴҷҶӌӋҹҸҽҼҿҾџЏшШщЩъЪыЫӹӸьЬэЭюЮяЯҩҨӀ"
+  @@euroducet_skippable =
+    "	 !\"#%&'()*+,-./:;<=>?@[\]^_`{|}~ ¡¦§¨©«®¯°±´¶·¸»¿×÷ʹʺ˂˃˄˅‐‑‒–—―‖‗‘’‚‛“”„‟†‡•" +
+    "‣․‥…‰→∞≈≠≡≤≥♯"
+  l1_weights = {'a' => 0}.clear
+  @@euroducet_base.chars.each_with_index {|ch, idx| l1_weights[ch] = idx }
+  @@euroducet_weights = {'a' => [0, 0, 0]}.clear
+  l1_idx = 0
+  @@euroducet_all.chars.each_with_index {|ch, l3_idx| @@euroducet_weights[ch] =
+                    [1 + (l1_idx = l1_weights.fetch(ch, l1_idx)), 1 + l3_idx, ch.ord] }
+  def self.collation_weight(ch)
+    @@euroducet_skippable.index(ch) ? [-1, -1, ch.ord] : @@euroducet_weights.fetch(ch,
+      ((ch.ord < 128) ? [0, 0, ch.ord] : [0x7FFFFFFF, 0x7FFFFFFF, ch.ord]))
+  end
 end
 
 class String
@@ -129,7 +168,8 @@ class String
           raise AlphabetException.new
         end
         Alphabet.char_to_idx[ch] = U8_0 + Alphabet.idx_to_char.size
-        Alphabet.idx_to_char << ch
+        Alphabet.idx_to_char   << ch
+        Alphabet.idx_to_weight << Alphabet.collation_weight(ch)
       end
       out << Alphabet.char_to_idx[ch]
     end
@@ -140,6 +180,30 @@ end
 class Array
   def to_utf8
     self.map {|idx| Alphabet.idx_to_char[idx] }.join
+  end
+
+  # Interpret two arrays as 8-bit-remapped Unicode strings and compare them using
+  # the rules, which partially implement the Unicode Collation Algorithm (UCA)
+  # from http://www.unicode.org/reports/tr10/
+  def collate(other, level = 0)
+    i, j = 0, 0
+    while true
+      w1, w2 = -1, -1
+      # Handle skipping of the punctuation characters if necessary at this level.
+      while i < self.size && ((w1 = Alphabet.idx_to_weight[self[i]][level]) == -1)
+        i += 1
+      end
+      while j < other.size && ((w2 = Alphabet.idx_to_weight[other[j]][level]) == -1)
+        j += 1
+      end
+      # No more data and still undecided? Try the next level or end the comparison.
+      return ((level == 2) ? 0 : collate(other, level + 1)) if w1 == -1 && w2 == -1
+      # Compare the current character.
+      return -1 if w1 < w2
+      return 1 if w1 > w2
+      i += 1
+      j += 1
+    end
   end
 end
 
