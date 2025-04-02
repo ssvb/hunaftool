@@ -23,7 +23,7 @@ def run_tests(dir, cmdlines)
       # .dic file decoding
       fmt = File.exist?(goodfilecsv) ? "csv" : "txt"
       cmdlines.each do |cmdline|
-        result = `#{cmdline} -o=#{fmt} #{filename} #{dicfile}`.lines.map {|l| l.strip }.sort
+        result = `#{cmdline} -o=#{fmt} #{filename} #{dicfile}`.lines.map {|l| l.strip }
         expected = File.read(goodfile).lines.map {|l| l.strip }.sort
         if result != expected
           STDERR.puts "\n== Test «#{cmdline} -o=#{fmt} #{filename} #{dicfile}» failed:"
@@ -36,9 +36,9 @@ def run_tests(dir, cmdlines)
         end
       end
     elsif File.exist?(txtfile) && File.exist?(goodfiledic)
-      # .dic file decoding
+      # .dic file encoding
       cmdlines.each do |cmdline|
-        result = `#{cmdline} -o=dic #{filename} #{txtfile}`.lines.map {|l| l.strip }.sort
+        result = `#{cmdline} -o=dic #{filename} #{txtfile}`.lines.map {|l| l.strip }
         expected = File.read(goodfiledic).lines.map {|l| l.strip }
         if result != expected
           STDERR.puts "\n== Test «#{cmdline} -o=dic #{filename} #{txtfile}» failed:"

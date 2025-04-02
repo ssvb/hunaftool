@@ -56,6 +56,9 @@ I64_0 = (0x3FFFFFFFFFFFFFFF & 0)
 # A 128-bit zero constant to hint the use of Int128 instead of Int32 for Crystal
 I128_0 = 0.to_i128
 
+# This is a Ruby-compatible trick to create a Crystal's lightweight tuple
+def tuple2(a, b) return a, b end
+
 ###############################################################################
 
 module Cfg
@@ -1232,24 +1235,18 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   # Have a boolean TODO flag for each of the wordforms that needs to be
   # present in the dictionary.
   todo = [true] * virtual_stem_area_begin
-  final_result = {"" => true}.clear
+  final_result = [tuple2([U8_0], "")].clear
 
   subtask "Greedily choose useful stems and optimize their affix flags" do
     order.each do |idx|
       data = idx_to_data[idx]
-      stem_is_virtual = aff_flags_intersect?(data.flags, aff.virtual_stem_flag)
-      data.flags = optimize_flags(aff, data.encword, data.flags, flag_freqs,
-                                  flag_names) {|wordform| todo[encword_to_idx[wordform]] }
-      effectivelycovers = 0
-      data.covers.each {|idx2| effectivelycovers += 1 if todo[idx2] }
-      # It's not useful to have a virtual stem producing only one wordform
-      # since we can just add that wordform itself without any fancy flags.
-      # Flags optimization may result in an empty set of flags too.
-      if effectivelycovers > 0 && !(stem_is_virtual && effectivelycovers == 1) &&
-                                  !aff_flags_empty?(data.flags)
-        final_result[data.encword.to_utf8 +
-          "/" + aff_flags_to_s(data.flags) + (stem_is_virtual ?
-                aff_flags_to_s(aff.virtual_stem_flag) : "")] = true
+      effectivelycovers = data.covers.count {|idx2| todo[idx2] }
+      # It's not useful to have a stem producing only one wordform since we
+      # can always just add that wordform itself without any fancy flags.
+      if effectivelycovers > 1
+        data.flags = optimize_flags(aff, data.encword, data.flags, flag_freqs,
+                                    flag_names) {|wordform| todo[encword_to_idx[wordform]] }
+        final_result << tuple2(data.encword, aff_flags_to_s(data.flags))
         # remove the result from the TODO list
         data.covers.each {|idx2| todo[idx2] = false }
       end
@@ -1258,23 +1255,17 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
 
   subtask "Add the leftover wordforms without any affix flags" do
     todo.each_index do |idx|
-      if todo[idx]
-        data = idx_to_data[idx]
-        final_result[data.encword.to_utf8] = true
-      end
+      final_result << tuple2(idx_to_data[idx].encword, "") if todo[idx]
     end
   end
 
   subtask "Write sorted results to «#{out_file ? out_file : "stdout"}»" do
-    if out_file
-      fh = File.open(out_file, "w")
-      fh.puts final_result.size
-      final_result.keys.sort.each {|word| fh.puts word }
-      fh.close
-    else
-      puts final_result.size
-      final_result.keys.sort.each {|word| puts word }
+    fh = (out_file ? File.open(out_file, "w") : STDOUT)
+    fh.puts final_result.size
+    final_result.sort {|a, b| (cmp = a[0].collate(b[0])) == 0 ? a[1] <=> b[1] : cmp }.each do |v|
+      fh.puts "#{v[0].to_utf8}#{v[1].empty? ? "" : "/"}#{v[1]}"
     end
+    fh.close if out_file
   end
 end
 
