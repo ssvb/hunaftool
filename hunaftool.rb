@@ -1041,7 +1041,9 @@ def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
 
   # If there's no NEEDAFFIX flag, then every flag combination also additionally produces
   # the stem itself.
+  have_needaffix = true
   if aff_flags_empty?(aff.virtual_stem_flag) || !aff_flags_intersect?(flags, aff.virtual_stem_flag)
+    have_needaffix = false
     flag_covers.each {|k, v| v.add(stem) }
   end
 
@@ -1050,7 +1052,7 @@ def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
   flag_covers_sorted = flag_covers.to_a.sort do |a, b|
     b[1].size == a[1].size ? flag_names[a[0]] <=> flag_names[b[0]] : b[1].size <=> a[1].size
   end
-  result_flags = empty_flags.dup
+  result_flags = (have_needaffix ? aff.virtual_stem_flag.dup : empty_flags.dup)
   already_covered = [stem].to_set.clear
   flag_covers_sorted.each do |flag, wordforms|
     useful = false
