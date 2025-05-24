@@ -19,7 +19,7 @@ jobs:
       - name: Run tests
         run: |
           crystal --version
-          crystal build --release hunaftool.rb
+          crystal build --release --static hunaftool.rb
           ./hunaftool
           ruby tests/run-hunaftool-tests.rb ./hunaftool tests
           ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
@@ -34,3 +34,8 @@ jobs:
           export LD_LIBRARY_PATH=$CRYSTAL_LIBRARY_PATH:$LD_LIBRARY_PATH
           crystal-1.6.0-1/bin/crystal build --release hunaftool.rb -o hunaftool-oldcr
           ruby tests/run-hunaftool-tests.rb ./hunaftool-oldcr tests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hunaftool-linux-x86_64
+          path: hunaftool
