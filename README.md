@@ -1,5 +1,4 @@
-# Hunaftool [![linux](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml) [![linux executable](https://img.shields.io/badge/linux_executable-black?logo=crystal)](https://nightly.link/ssvb/hunaftool/workflows/linux/main)
-            [![windows](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml) [![windows executable](https://img.shields.io/badge/windows_executable-black?logo=crystal)](https://nightly.link/ssvb/hunaftool/workflows/windows/main)
+# Hunaftool [![linux](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml) [![linux executable](https://img.shields.io/badge/linux_executable-black?logo=crystal)](https://nightly.link/ssvb/hunaftool/workflows/linux/main) [![windows](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml) [![windows executable](https://img.shields.io/badge/windows_executable-black?logo=crystal)](https://nightly.link/ssvb/hunaftool/workflows/windows/main)
 # https://nightly.link/ssvb/hunaftool/workflows/linux/main
 # https://nightly.link/ssvb/hunaftool/workflows/windows/main
 
