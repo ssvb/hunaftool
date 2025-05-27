@@ -1,4 +1,4 @@
-# Hunaftool [![linux](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml) [![windows](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml)
+# Hunaftool [![linux](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/linux.yml) [![amd64](https://img.shields.io/badge/amd64-black?logo=crystal)](https://nightly.link/ssvb/hunaftool/workflows/linux/main) [![windows](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml/badge.svg)](https://github.com/ssvb/hunaftool/actions/workflows/windows.yml) [![x64](https://img.shields.io/badge/x64-black?logo=crystal)](https://nightly.link/ssvb/hunaftool/workflows/windows/main)
 Automatic manipulation and conversion of Hunspell dictionary files
 
 ## Usage
