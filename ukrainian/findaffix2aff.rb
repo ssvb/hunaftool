@@ -23,6 +23,8 @@ rulesets = [[[""]]].clear
 File.open(ARGV[0]).each_line {|l|
   a = l.strip.split('/')
 
+  next if a[0].size == 0 || a[1].size == 0
+
   done = false
   rulesets.each {|ruleset|
     if try_add_rule(ruleset, a)

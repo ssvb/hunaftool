@@ -23,7 +23,7 @@ jobs:
           ./hunaftool
           ruby tests/run-hunaftool-tests.rb ./hunaftool tests
           ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
-          time ./hunaftool -v ukrainian/test.aff ukrainian/words_spell.txt ukrainian/words_spell.dic
+          time ./hunaftool -v ukrainian/test2.aff ukrainian/words_spell.txt ukrainian/words_spell.dic
 
       - name: Run tests with the old Crystal 1.6.0 from Debian "bookworm"
         run: |
