@@ -63,8 +63,11 @@ def tuple2(a, b) return a, b end
 
 module Cfg
   @@verbose = false
-  def self.verbose?    ; @@verbose end
-  def self.verbose=(v) ; @@verbose = v end
+  @@prune_aff = false
+  def self.verbose?      ; @@verbose end
+  def self.verbose=(v)   ; @@verbose = v end
+  def self.prune_aff?    ; @@prune_aff end
+  def self.prune_aff=(v) ; @@prune_aff = v end
 end
 
 # Run a subtask with optional reporting about performance and memory usage
@@ -435,6 +438,7 @@ class AffixMatch
   def append_left  ; @append_left        end
   def remove_right ; @remove_right       end
   def append_right ; @append_right       end
+  def rawsrc       ; @rawsrc    end
   def to_s         ; "«" + @rawsrc + "»" end
 end
 
@@ -683,6 +687,16 @@ class AFF
   def virtual_stem_flag  ; @virtual_stem_flag end
   def forbiddenword_flag ; @forbiddenword_flag end
 
+  @@useful_rules = {"" => 0}.clear
+
+  def mark_useful_rule(rule)
+    @@useful_rules[rule.rawsrc] = @@useful_rules.fetch(rule.rawsrc, 0) + 1
+  end
+
+  def pruned_rules
+    @@useful_rules.to_a.map {|x| x[0] + " # " + x[1].to_s }.join("\n")
+  end
+
   # Find all wordforms produced by a stem with a specified set of flags.
   # Each of the matched wordforms is yielded to a block along with the
   # prefix flags and the suffix flags that triggered this match.
@@ -703,6 +717,7 @@ class AFF
     prefixes_from_stem.matched_rules(stem) do |pfx|
       # Check if we have a match for the necessary affix flags.
       if aff_flags_intersect?(flags, pfx.flag) && (stem.size != pfx.remove_left || @fullstrip)
+        mark_useful_rule(pfx) if Cfg.prune_aff?
         # Apply the current prefix.
         @tmpbuf.clear
         @tmpbuf.concat(pfx.append_left)
@@ -717,6 +732,7 @@ class AFF
       # Check if we have a match for the necessary affix flags.
       if aff_flags_intersect?(flags, sfx.flag) &&
                                         (stem.size != sfx.remove_right || @fullstrip)
+        mark_useful_rule(sfx) if Cfg.prune_aff?
         # One more opportunity to activate the FORBIDDENWORD flag is here
         forbidden2 = forbidden || aff_flags_intersect?(sfx.flag2, @forbiddenword_flag)
         # Apply the current first level suffix.
@@ -734,6 +750,7 @@ class AFF
             # Check if we have a match for the necessary affix flags.
             if aff_flags_intersect?(sfx.flag2, sfx2.flag) &&
                                           (@tmpbuf.size != sfx2.remove_right || @fullstrip)
+              mark_useful_rule(sfx2) if Cfg.prune_aff?
               # Apply the current second level suffix on top of the first level suffix.
               @tmpbuf3.clear
               (0 ... @tmpbuf.size - sfx2.remove_right).each {|i| @tmpbuf3 << @tmpbuf[i] }
@@ -753,6 +770,7 @@ class AFF
                 sfx_induced_pfx_match = aff_flags_intersect?(sfx.flag2, pfx.flag)
                 if (direct_pfx_match || sfx_induced_pfx_match) &&
                                           (@tmpbuf3.size != pfx.remove_left || @fullstrip)
+                  mark_useful_rule(pfx) if Cfg.prune_aff?
                   # Apply the current prefix on top of the two already applied suffixes.
                   @tmpbuf2.clear
                   @tmpbuf2.concat(pfx.append_left)
@@ -778,6 +796,7 @@ class AFF
           sfx_induced_pfx_match = aff_flags_intersect?(sfx.flag2, pfx.flag)
           if (direct_pfx_match || sfx_induced_pfx_match) &&
                                         (@tmpbuf.size != pfx.remove_left || @fullstrip)
+            mark_useful_rule(pfx) if Cfg.prune_aff?
             # Apply the current prefix on top of a single first level suffix.
             @tmpbuf2.clear
             @tmpbuf2.concat(pfx.append_left)
@@ -945,6 +964,15 @@ def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_fi
     else
       tmp.each {|v| results_filt.push([v]) }
     end
+  end
+
+  if Cfg.prune_aff?
+    if out_file
+      File.write(out_file, aff.pruned_rules)
+    else
+      puts aff.pruned_rules
+    end
+    return
   end
 
   results = [""].clear
@@ -1486,6 +1514,7 @@ input_format="csv" if input_format == "unk" && args.size >= 2 && args[1] =~ /\.c
 output_format="dic" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.dic$/i
 output_format="txt" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.txt$/i
 output_format="csv" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.csv$/i
+output_format="aff" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.aff$/i
 
 # Default to the comma separated text output
 output_format = "csv" if output_format == "unk" && args.size == 2 && input_format == "dic"
@@ -1493,6 +1522,8 @@ output_format = "csv" if output_format == "unk" && args.size == 2 && input_forma
 # Default to producing a .DIC file if only given text input
 output_format = "dic" if output_format == "unk" && args.size == 2 &&
                          (input_format == "txt" || input_format == "csv")
+
+output_format = "aff" if output_format == "unk" && args.size == 2 && input_format == "dic"
 
 ###############################################################################
 
@@ -1503,6 +1534,12 @@ end
 
 if input_format == "dic" && output_format == "csv" && args.size >= 2
   convert_dic_to_txt(args[0], args[1], ", ", (args.size >= 3 ? args[2] : nil))
+  exit 0
+end
+
+if input_format == "dic" && output_format == "aff" && args.size >= 2
+  Cfg.prune_aff = true
+  convert_dic_to_txt(args[0], args[1], nil, (args.size >= 3 ? args[2] : nil))
   exit 0
 end
 
