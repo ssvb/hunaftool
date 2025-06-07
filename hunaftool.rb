@@ -109,6 +109,7 @@ module Alphabet
   def self.reset(characters)
     @@char_to_idx = {'a' => U8_0}.clear
     @@idx_to_char = ['a'].clear
+    @@idx_to_weight = [[0, 0, 0]].clear
     @@finalized   = false
     characters.to_8bit
   end
