@@ -2,7 +2,7 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-# allow to have a condition field up to this size
+# allow to have a condition field up to this size for zero affixes
 KEEP_COND_SIZE   = 1
 # the maximum number of affixes for a single stem
 MAX_STEM_AFFIXES = 1000
@@ -49,9 +49,13 @@ def affcombs(stem, affixes)
 
     0.upto(affixes.size - 1) do |i|
       (i + 1).upto(affixes.size - 1) do |j|
-        next if common_prefix_len(affixes[i], affixes[j]) > KEEP_COND_SIZE
-        yield "#{affixes[i].join}/#{affixes[j].join}/1"
-        yield "#{affixes[j].join}/#{affixes[i].join}/1"
+        len = common_prefix_len(affixes[i], affixes[j])
+        if len == 0 || (len == affixes[i].size && len <= KEEP_COND_SIZE)
+          yield "#{affixes[i].join}/#{affixes[j].join}/1"
+        end
+        if len == 0 || (len == affixes[j].size && len <= KEEP_COND_SIZE)
+          yield "#{affixes[j].join}/#{affixes[i].join}/1"
+        end
       end
     end
 end
