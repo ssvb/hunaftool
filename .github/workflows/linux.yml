@@ -40,7 +40,7 @@ jobs:
           ruby tests/run-hunaftool-tests.rb ./hunaftool tests
           ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
           crystal build --release --static txt2rul.cr
-          TMPDIR=. ./txt2rul words.txt > words_suf.rul
+          TMPDIR=. ./txt2rul words.txt | head -n 2000000 > words_suf.rul
 
       - name: Run tests with the old Crystal 1.6.0 from Debian "bookworm"
         run: |

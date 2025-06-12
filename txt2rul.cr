@@ -5,7 +5,7 @@
 # allow to have a condition field up to this size
 KEEP_COND_SIZE   = 1
 # the maximum number of affixes for a single stem
-MAX_STEM_AFFIXES = 1000
+MAX_STEM_AFFIXES = 3000
 
 # Yield all possible ways of splitting the word into stem/affix pairs
 def affix_variants(word)
