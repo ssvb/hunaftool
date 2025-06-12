@@ -39,12 +39,6 @@ jobs:
           ./hunaftool
           ruby tests/run-hunaftool-tests.rb ./hunaftool tests
           ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
-          crystal build --release --static txt2rul.cr
-          crystal build --release --static rul2aff.rb
-          TMPDIR=. ./txt2rul words.txt > words_suf.rul
-          ./rul2aff words_suf.rul > words_suf.aff
-          ./hunaftool -v words_suf.aff words.txt words.dic
-          ./hunaftool -v words_suf.aff words.dic words_pruned.dic
 
       - name: Run tests with the old Crystal 1.6.0 from Debian "bookworm"
         run: |
@@ -56,6 +50,21 @@ jobs:
           export LD_LIBRARY_PATH=$CRYSTAL_LIBRARY_PATH:$LD_LIBRARY_PATH
           crystal-1.6.0-1/bin/crystal build --release hunaftool.rb -o hunaftool-oldcr
           ruby tests/run-hunaftool-tests.rb ./hunaftool-oldcr tests
+          crystal build --release --static txt2rul.cr
+          crystal build --release --static rul2aff.rb
+
+      - name: Construct affix rules
+        run: |
+          TMPDIR=. ./txt2rul words.txt > words_suf.rul
+
+      - name: Construct affix file
+        run: |
+          ./rul2aff words_suf.rul > words_suf.aff
+
+      - name: Prune affix file
+        run: |
+          ./hunaftool -v words_suf.aff words.txt words.dic
+          ./hunaftool -v words_suf.aff words.dic words_pruned.aff
 
       - uses: actions/upload-artifact@v4
         with:
@@ -65,4 +74,4 @@ jobs:
             words_suf.rul
             words_suf.aff
             words.dic
-            words_pruned.dic
+            words_pruned.aff
