@@ -5,7 +5,9 @@
 # allow to have a condition field up to this size
 KEEP_COND_SIZE   = 1
 # the maximum number of affixes for a single stem
-MAX_STEM_AFFIXES = 3000
+MAX_STEM_AFFIXES = 1000
+# the number of rules
+RULES_LIMIT      = 1000000
 
 # Yield all possible ways of splitting the word into stem/affix pairs
 def affix_variants(word)
@@ -111,8 +113,10 @@ pipe_through_coreutils_sort(["--field-separator=/", "--key=3,3nr", "--key=1,2", 
   end
   sort_input.close
 
+  rules_cnt = 0
   sort_output.each_line do |l|
     a = l.strip.split('/')
     STDOUT.puts "SFX ? #{a[0] == "" ? "0" : a[0]} #{a[1] == "" ? "0" : a[1]} .\t##{a[2]}" if a[2].to_i > 1
+    break if (rules_cnt += 1) >= RULES_LIMIT
   end
 end
