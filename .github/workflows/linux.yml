@@ -41,8 +41,10 @@ jobs:
           ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
           crystal build --release --static txt2rul.cr
           crystal build --release --static rul2aff.rb
-          TMPDIR=. ./txt2rul words.txt | head -n 2000000 > words_suf.rul
+          TMPDIR=. ./txt2rul words.txt > words_suf.rul
           ./rul2aff words_suf.rul > words_suf.aff
+          ./hunaftool -v words_suf.aff words.txt words.dic
+          ./hunaftool -v words_suf.aff words.dic words_pruned.dic
 
       - name: Run tests with the old Crystal 1.6.0 from Debian "bookworm"
         run: |
@@ -62,3 +64,5 @@ jobs:
             hunaftool
             words_suf.rul
             words_suf.aff
+            words.dic
+            words_pruned.dic
