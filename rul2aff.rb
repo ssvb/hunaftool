@@ -6,6 +6,11 @@ suff_flags = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 pref_flags = "0123456789"
 comb_flags = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
+suff_flags += pref_flags
+suff_flags += comb_flags
+
+suff_flags = suff_flags.chars.sort.uniq.join
+
 def independent?(a, b)
   a, b = b, a if b[0].size > a[0].size
   return a[0][-b[0].size, b[0].size] != b[0]

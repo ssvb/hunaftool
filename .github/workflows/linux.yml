@@ -65,7 +65,7 @@ jobs:
       - name: Prune unnecessary rules
         run: ./hunaftool words_suf.aff words.dic words_pruned.aff
 
-      - name: Generate a dictionary
+      - name: Generate a dictionary with pruned rules
         run: ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
 
       - uses: actions/upload-artifact@v4
