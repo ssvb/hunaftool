@@ -34,7 +34,7 @@ jobs:
           name: hunaftool-linux-x86_64
           path: hunaftool
 
-  arul-suf:
+  arul-suff:
     runs-on: ubuntu-latest
     steps:
       - name: Maximize build space
@@ -58,40 +58,41 @@ jobs:
       - name: Install Crystal and Zstandard
         run: |
           sudo apt-get update && sudo apt-get install crystal zstd -y
+          crystal build --release --static hunaftool.rb
           crystal build --release --static txt2rul.cr
+          crystal build --release --static rul2aff.rb
 
-      - name: Find promising affix rule candidates
-        run: TMPDIR=. ./txt2rul words.txt > words_suf.arul
+      - name: Find promising suffix rule candidates
+        run: TMPDIR=. ./txt2rul words.txt > words_suff.arul
 
       - uses: actions/upload-artifact@v4
         with:
-          name: words_suf_arul
-          path: words_suf.arul
+          name: words_suff_arul
+          path: |
+            hunaftool
+            txt2rul
+            rul2aff
+            words_suff.arul
 
   dict:
     runs-on: ubuntu-latest
-    needs: [arul-suf]
+    needs: [arul-suff]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Crystal and Zstandard
-        run: |
-          sudo apt-get update && sudo apt-get install crystal zstd -y
-          crystal build --release --static rul2aff.rb
-
-      - name: Download words_suf.arul
+      - name: Download words_suff.arul
         uses: actions/download-artifact@v4
         with:
-          name: words_suf_arul
+          name: words_suff_arul
 
       - name: Assemble an affix file from the rules
-        run: ./rul2aff words_suf.arul > words_suf.aff
+        run: ./rul2aff words_suff.arul > words_suff.aff
 
       - name: Generate a dictionary
-        run: ./hunaftool -v words_suf.aff words.txt words.dic
+        run: ./hunaftool -v words_suff.aff words.txt words.dic
 
       - name: Prune unnecessary rules
-        run: ./hunaftool words_suf.aff words.dic words_pruned.aff
+        run: ./hunaftool words_suff.aff words.dic words_pruned.aff
 
       - name: Generate a dictionary with pruned rules
         run: ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
@@ -100,8 +101,8 @@ jobs:
         with:
           name: words
           path: |
-            words_suf.arul
-            words_suf.aff
+            words_suff.arul
+            words_suff.aff
             words.dic
             words_pruned.aff
             words_pruned.dic
