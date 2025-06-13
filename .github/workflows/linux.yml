@@ -3,34 +3,12 @@ on: [push, pull_request]
 
 jobs:
   test:
-    name: tests
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
-
-      - name: Report free space
-        run: |
-          echo "Free space:"
-          df -h
-
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install Ruby and Crystal
-        run: |
-          sudo apt-get update && sudo apt-get install ruby crystal zstd -y
+        run: sudo apt-get update && sudo apt-get install ruby crystal -y
 
       - name: Run tests
         run: |
@@ -50,14 +28,64 @@ jobs:
           export LD_LIBRARY_PATH=$CRYSTAL_LIBRARY_PATH:$LD_LIBRARY_PATH
           crystal-1.6.0-1/bin/crystal build --release hunaftool.rb -o hunaftool-oldcr
           ruby tests/run-hunaftool-tests.rb ./hunaftool-oldcr tests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hunaftool-linux-x86_64
+          path: hunaftool
+
+  arul-suf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+
+      - name: Report free space
+        run: |
+          echo "Free space:"
+          df -h
+
+      - uses: actions/checkout@v4
+
+      - name: Install Crystal and Zstandard
+        run: |
+          sudo apt-get update && sudo apt-get install crystal zstd -y
           crystal build --release --static txt2rul.cr
-          crystal build --release --static rul2aff.rb
 
       - name: Find promising affix rule candidates
-        run: TMPDIR=. ./txt2rul words.txt > words_suf.rul
+        run: TMPDIR=. ./txt2rul words.txt > words_suf.arul
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: words_suf_arul
+          path: words_suf.arul
+
+  dict:
+    runs-on: ubuntu-latest
+    needs: [arul-suf]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Crystal and Zstandard
+        run: |
+          sudo apt-get update && sudo apt-get install crystal zstd -y
+          crystal build --release --static rul2aff.rb
+
+      - name: Download words_suf.arul
+        uses: actions/download-artifact@v4
+        with:
+          name: words_suf_arul
 
       - name: Assemble an affix file from the rules
-        run: ./rul2aff words_suf.rul > words_suf.aff
+        run: ./rul2aff words_suf.arul > words_suf.aff
 
       - name: Generate a dictionary
         run: ./hunaftool -v words_suf.aff words.txt words.dic
@@ -70,10 +98,9 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: hunaftool-linux-x86_64
+          name: words
           path: |
-            hunaftool
-            words_suf.rul
+            words_suf.arul
             words_suf.aff
             words.dic
             words_pruned.aff
