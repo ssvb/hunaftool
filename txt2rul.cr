@@ -5,7 +5,7 @@
 # allow to have a condition field up to this size for zero affixes
 KEEP_COND_SIZE   = 1
 # the maximum number of affixes for a single stem
-MAX_STEM_AFFIXES = 1000
+MAX_STEM_AFFIXES = 3000
 # the number of rules
 RULES_LIMIT      = 1000000
 
@@ -43,7 +43,7 @@ end
 # This yield all possible stripping/affix combinations for a common stem.
 def affcombs(stem, affixes)
   if affixes.size > MAX_STEM_AFFIXES
-    STDERR.puts "! The stem «#{stem}» has #{affixes.size} affixes and exceeds the allowed limit - SKIPED."
+    STDERR.puts "! The stem «#{stem}» has #{affixes.size} affixes and exceeds the allowed limit - SKIPPED."
     return
   end
 
