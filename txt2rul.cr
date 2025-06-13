@@ -43,7 +43,7 @@ end
 # This yield all possible stripping/affix combinations for a common stem.
 def affcombs(stem, affixes)
   if affixes.size > MAX_STEM_AFFIXES
-    STDERR.puts "! stem '#{stem}' has #{affixes.size} affixes and exceeds the allowed limit - skipped."
+    STDERR.puts "! The stem «#{stem}» has #{affixes.size} affixes and exceeds the allowed limit - SKIPED."
     return
   end
 
@@ -121,6 +121,10 @@ pipe_through_coreutils_sort(["--field-separator=/", "--key=3,3nr", "--key=1,2", 
   sort_output.each_line do |l|
     a = l.strip.split('/')
     STDOUT.puts "SFX ? #{a[0] == "" ? "0" : a[0]} #{a[1] == "" ? "0" : a[1]} .\t##{a[2]}" if a[2].to_i > 1
-    break if (rules_cnt += 1) >= RULES_LIMIT
+    if (rules_cnt += 1) >= RULES_LIMIT
+      STDERR.puts "! rules limit exceeded"
+      sort_output.close
+      break
+    end
   end
 end
