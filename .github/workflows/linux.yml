@@ -53,18 +53,20 @@ jobs:
           crystal build --release --static txt2rul.cr
           crystal build --release --static rul2aff.rb
 
-      - name: Construct affix rules
-        run: |
-          TMPDIR=. ./txt2rul words.txt > words_suf.rul
+      - name: Find promising affix rule candidates
+        run: TMPDIR=. ./txt2rul words.txt > words_suf.rul
 
-      - name: Construct affix file
-        run: |
-          ./rul2aff words_suf.rul > words_suf.aff
+      - name: Assemble an affix file from the rules
+        run: ./rul2aff words_suf.rul > words_suf.aff
 
-      - name: Prune affix file
-        run: |
-          ./hunaftool -v words_suf.aff words.txt words.dic
-          ./hunaftool -v words_suf.aff words.dic words_pruned.aff
+      - name: Generate a dictionary
+        run: ./hunaftool -v words_suf.aff words.txt words.dic
+
+      - name: Prune unnecessary rules
+        run: ./hunaftool words_suf.aff words.dic words_pruned.aff
+
+      - name: Generate a dictionary
+        run: ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
 
       - uses: actions/upload-artifact@v4
         with:
@@ -75,3 +77,4 @@ jobs:
             words_suf.aff
             words.dic
             words_pruned.aff
+            words_pruned.dic
