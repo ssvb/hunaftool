@@ -11,6 +11,8 @@ suff_flags += comb_flags
 
 suff_flags = suff_flags.chars.sort.uniq.join
 
+suff_flags = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 def independent?(a, b)
   a, b = b, a if b[0].size > a[0].size
   return a[0][-b[0].size, b[0].size] != b[0]
