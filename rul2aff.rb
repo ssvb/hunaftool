@@ -79,7 +79,7 @@ puts
 rulesets.each_with_index do |ruleset, idx|
   code = suff_flags[idx]
   puts "#{ruleset[0][2]} #{code} Y #{ruleset.size}"
-  ruleset.each do |rule|
+  ruleset.sort {|a, b| a[1] == b[1] ? a[0] <=> b[0] : a[1] <=> b[1] }.each do |rule|
     puts "#{rule[2]} #{code} #{rule[0]} #{rule[1]} ."
   end
   puts
