@@ -66,6 +66,7 @@ File.open(ARGV[0]).each_line do |l|
 end
 
 puts "SET UTF-8"
+puts "WORDCHARS -ʼ’'"
 puts
 
 rulesets.each_with_index do |ruleset, idx|
