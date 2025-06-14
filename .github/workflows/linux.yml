@@ -94,8 +94,16 @@ jobs:
       - name: Generate a dictionary
         run: ./hunaftool -v words_suff.aff words.txt words.dic
 
+      - name: Distill a reduced .arul file
+        run: |
+          ./hunaftool words_suff.aff words.dic words_suff_pruned.arul
+          ./rul2aff words_suff_pruned.arul > words_suff_pruned.aff
+
+      - name: Generate a dictionary
+        run: ./hunaftool -v words_suff_pruned.aff words.txt words_suff_pruned.dic
+
       - name: Prune unnecessary rules
-        run: ./hunaftool words_suff.aff words.dic words_pruned.aff
+        run: ./hunaftool words_suff_pruned.aff words_suff_pruned.dic words_pruned.aff
 
       - name: Generate a dictionary with pruned rules
         run: ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
@@ -105,7 +113,11 @@ jobs:
           name: words
           path: |
             words_suff.arul
+            words_suff_pruned.arul
             words_suff.aff
+            words_suff_pruned.aff
             words.dic
             words_pruned.aff
             words_pruned.dic
+            words_suff_pruned.aff
+            words_suff_pruned.dic
