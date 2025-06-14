@@ -92,7 +92,10 @@ jobs:
           ./rul2aff words_suff.arul > words_suff.aff
 
       - name: Generate a dictionary
-        run: ./hunaftool -v words_suff.aff words.txt words.dic
+        run: |
+          ./hunaftool -v words_suff.aff words.txt words.dic
+          ls -l words.dic
+          wc -l words.dic
 
       - name: Distill a reduced .arul file
         run: |
@@ -100,13 +103,19 @@ jobs:
           ./rul2aff words_suff_pruned.arul > words_suff_pruned.aff
 
       - name: Generate a dictionary
-        run: ./hunaftool -v words_suff_pruned.aff words.txt words_suff_pruned.dic
+        run: |
+          ./hunaftool -v words_suff_pruned.aff words.txt words_suff_pruned.dic
+          ls -l words_suff_pruned.dic
+          wc -l words_suff_pruned.dic
 
       - name: Prune unnecessary rules
         run: ./hunaftool words_suff_pruned.aff words_suff_pruned.dic words_pruned.aff
 
       - name: Generate a dictionary with pruned rules
-        run: ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
+        run: |
+          ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
+          ls -l words_pruned.dic
+          wc -l words_pruned.dic
 
       - uses: actions/upload-artifact@v4
         with:
