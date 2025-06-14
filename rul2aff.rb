@@ -42,7 +42,7 @@ File.open(ARGV[0]).each_line do |l|
   a = l.strip.split
   next unless a[0] == "SFX"
 
-  next if a[2] == "0" || a[3] == "0"
+  next if a[2] == "0" || a[3] == "0" || a[2].size < 2
 
   a = [a[2], a[3], a[0]]
 
