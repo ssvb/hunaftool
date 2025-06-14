@@ -38,7 +38,10 @@ if ARGV.size >= 2
   log_rejected = File.open(ARGV[1], "w")
 end
 
+linenum = 0
+lastline = 0
 File.open(ARGV[0]).each_line do |l|
+  linenum += 1
   a = l.strip.split
   next unless a[0] == "SFX"
 
@@ -54,9 +57,12 @@ File.open(ARGV[0]).each_line do |l|
     end
   }
 
+  lastline = linenum if done
+
   unless done
     if rulesets.size < suff_flags.size
       rulesets.push([a])
+      lastline = linenum
     else
       if log_rejected
         log_rejected.puts l.strip
@@ -65,6 +71,7 @@ File.open(ARGV[0]).each_line do |l|
   end
 end
 
+puts "# used arul entries up to line #{lastline}"
 puts "SET UTF-8"
 puts "WORDCHARS -ʼ’'"
 puts
