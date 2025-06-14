@@ -89,7 +89,7 @@ jobs:
         run: |
           chmod +x hunaftool
           chmod +x rul2aff
-          ./rul2aff words_suff.arul > words_suff.aff
+          ./rul2aff words_suff.arul word_suff_rejected.arul > words_suff.aff
 
       - name: Generate a dictionary
         run: |
@@ -100,7 +100,8 @@ jobs:
       - name: Distill a reduced .arul file
         run: |
           ./hunaftool words_suff.aff words.dic words_suff_pruned.arul
-          ./rul2aff words_suff_pruned.arul > words_suff_pruned.aff
+          cat word_suff_rejected.arul >> words_suff_pruned.arul
+          ./rul2aff words_suff_pruned.arul word_suff_rejected2.arul > words_suff_pruned.aff
 
       - name: Generate a dictionary
         run: |
@@ -108,8 +109,19 @@ jobs:
           ls -l words_suff_pruned.dic
           wc -l words_suff_pruned.dic
 
+      - name: Distill a reduced .arul file, try2
+        run: |
+          ./hunaftool words_suff_pruned.aff words_suff_pruned2.dic words_suff_pruned2.arul
+          ./rul2aff words_suff_pruned2.arul > words_suff_pruned2.aff
+
+      - name: Generate a dictionary
+        run: |
+          ./hunaftool -v words_suff_pruned2.aff words.txt words_suff_pruned2.dic
+          ls -l words_suff_pruned2.dic
+          wc -l words_suff_pruned2.dic
+
       - name: Prune unnecessary rules
-        run: ./hunaftool words_suff_pruned.aff words_suff_pruned.dic words_pruned.aff
+        run: ./hunaftool words_suff_pruned2.aff words_suff_pruned2.dic words_pruned.aff
 
       - name: Generate a dictionary with pruned rules
         run: |
@@ -130,3 +142,5 @@ jobs:
             words_pruned.dic
             words_suff_pruned.aff
             words_suff_pruned.dic
+            words_suff_pruned2.aff
+            words_suff_pruned2.dic

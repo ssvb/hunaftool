@@ -33,6 +33,11 @@ end
 
 rulesets = [[[""]]].clear
 
+log_rejected = nil
+if ARGV.size >= 2
+  log_rejected = File.open(ARGV[1], "w")
+end
+
 File.open(ARGV[0]).each_line do |l|
   a = l.strip.split
   next unless a[0] == "SFX"
@@ -50,7 +55,13 @@ File.open(ARGV[0]).each_line do |l|
   }
 
   unless done
-    rulesets.push([a]) if rulesets.size < suff_flags.size
+    if rulesets.size < suff_flags.size
+      rulesets.push([a])
+    else
+      if log_rejected
+        log_rejected.puts l.strip
+      end
+    end
   end
 end
 
