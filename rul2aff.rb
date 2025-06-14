@@ -9,9 +9,7 @@ comb_flags = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 suff_flags += pref_flags
 suff_flags += comb_flags
 
-suff_flags = suff_flags.chars.sort.uniq.join
-
-suff_flags = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+suff_flags = suff_flags.chars.sort.uniq.first(75).join
 
 def independent?(a, b)
   a, b = b, a if b[0].size > a[0].size
