@@ -31,6 +31,11 @@ def try_add_rule(rules, rule)
   return false
 end
 
+def tuple2(x, y)
+  return x, y
+end
+aff_to_rule_id = {tuple2(0, "") => 0}.clear
+
 rulesets = [[[""]]].clear
 
 log_rejected = nil
@@ -44,14 +49,19 @@ File.open(ARGV[0]).each_line do |l|
   linenum += 1
   a = l.strip.split
   next unless a[0] == "SFX"
-
   next if a[2] == "0" || a[3] == "0" || a[2].size < 2
-
   a = [a[2], a[3], a[0]]
 
+  # matching affix
+  if (id = aff_to_rule_id.fetch(tuple2(a[0].size, a[1]), nil))
+    rulesets[id].push(a)
+    next
+  end
+
   done = false
-  rulesets.each {|ruleset|
+  rulesets.each_with_index {|ruleset, id|
     if try_add_rule(ruleset, a)
+      aff_to_rule_id[tuple2(a[0].size, a[1])] = id
       done = true
       break
     end
@@ -61,6 +71,7 @@ File.open(ARGV[0]).each_line do |l|
 
   unless done
     if rulesets.size < suff_flags.size
+      aff_to_rule_id[tuple2(a[0].size, a[1])] = rulesets.size
       rulesets.push([a])
       lastline = linenum
     else
