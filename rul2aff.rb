@@ -7,7 +7,7 @@ pref_flags = "0123456789"
 comb_flags = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
 suff_flags += pref_flags
-#suff_flags += comb_flags
+suff_flags += comb_flags
 
 suff_flags = suff_flags.chars.sort.uniq.join
 
