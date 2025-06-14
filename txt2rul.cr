@@ -2,12 +2,13 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
+DESIRED_MIN_STRIP_SIZE = 2
 # allow to have a condition field up to this size for zero affixes
-KEEP_COND_SIZE   = 1
+KEEP_COND_SIZE         = 1
 # the maximum number of affixes for a single stem
-MAX_STEM_AFFIXES = 3000
+MAX_STEM_AFFIXES       = 3000
 # the number of rules
-RULES_LIMIT      = 2000000
+RULES_LIMIT            = 2000000
 
 # Yield all possible ways of splitting the word into stem/affix pairs
 def affix_variants(word)
@@ -50,10 +51,10 @@ def affcombs(stem, affixes)
     0.upto(affixes.size - 1) do |i|
       (i + 1).upto(affixes.size - 1) do |j|
         len = common_prefix_len(affixes[i], affixes[j])
-        if len == 0 || (len == affixes[i].size && len <= KEEP_COND_SIZE)
+        if len == 0 || ((affixes[i].size - len) < DESIRED_MIN_STRIP_SIZE && len <= KEEP_COND_SIZE)
           yield "#{affixes[i].join}/#{affixes[j].join}/1"
         end
-        if len == 0 || (len == affixes[j].size && len <= KEEP_COND_SIZE)
+        if len == 0 || ((affixes[j].size - len) < DESIRED_MIN_STRIP_SIZE && len <= KEEP_COND_SIZE)
           yield "#{affixes[j].join}/#{affixes[i].join}/1"
         end
       end
