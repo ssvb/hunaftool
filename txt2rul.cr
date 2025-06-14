@@ -2,11 +2,11 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-DESIRED_MIN_STRIP_SIZE = 2
+DESIRED_MIN_STRIP_SIZE = 3
 # allow to have a condition field up to this size for zero affixes
 KEEP_COND_SIZE         = 1
 # the maximum number of affixes for a single stem
-MAX_STEM_AFFIXES       = 3000
+MAX_STEM_AFFIXES       = 1000
 # the number of rules
 RULES_LIMIT            = 2000000
 
