@@ -64,10 +64,13 @@ def tuple2(a, b) return a, b end
 module Cfg
   @@verbose = false
   @@prune_aff = false
+  @@arul = false
   def self.verbose?      ; @@verbose end
   def self.verbose=(v)   ; @@verbose = v end
   def self.prune_aff?    ; @@prune_aff end
   def self.prune_aff=(v) ; @@prune_aff = v end
+  def self.arul?         ; @@arul end
+  def self.arul=(v)      ; @@arul = v end
 end
 
 # Run a subtask with optional reporting about performance and memory usage
@@ -696,6 +699,13 @@ class AFF
 
   # Return the optimized AFF file with unnecessary rules removed from it
   def aff_data_with_pruned_rules
+    if Cfg.arul?
+      lines = [""].clear
+      @@useful_rules.to_a.sort {|a, b| b[1] <=> a[1] }.each do |rule, freq|
+        lines.push(rule.strip.gsub(/^([SP]FX\s+)\S+/, "\\1?") + "\t#" + freq.to_s) if freq > 1
+      end
+      return lines.join("\n")
+    else
     curflag = ""
     curflagcnt = 0
     flaglineno = -1
@@ -726,6 +736,7 @@ class AFF
         lines[flaglineno].sub(/^([SP]FX\s+(\S+)\s+(\S+)\s+)(\S+)/, "\\1#{curflagcnt}")
     end
     lines.join("\n")
+    end
   end
 
   # Find all wordforms produced by a stem with a specified set of flags.
@@ -1551,6 +1562,7 @@ output_format="dic" if output_format == "unk" && args.size >= 3 && args[2] =~ /\
 output_format="txt" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.txt$/i
 output_format="csv" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.csv$/i
 output_format="aff" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.aff$/i
+output_format="arul" if output_format == "unk" && args.size >= 3 && args[2] =~ /\.arul$/i
 
 # Default to the comma separated text output
 output_format = "csv" if output_format == "unk" && args.size == 2 && input_format == "dic"
@@ -1575,6 +1587,13 @@ end
 
 if input_format == "dic" && output_format == "aff" && args.size >= 2
   Cfg.prune_aff = true
+  convert_dic_to_txt(args[0], args[1], nil, (args.size >= 3 ? args[2] : nil))
+  exit 0
+end
+
+if input_format == "dic" && output_format == "arul" && args.size >= 2
+  Cfg.prune_aff = true
+  Cfg.arul = true
   convert_dic_to_txt(args[0], args[1], nil, (args.size >= 3 ? args[2] : nil))
   exit 0
 end
