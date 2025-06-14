@@ -111,10 +111,10 @@ jobs:
 
       - name: Distill a reduced .arul file, try2
         run: |
-          ./hunaftool words_suff_pruned.aff words_suff_pruned2.dic words_suff_pruned2.arul
+          ./hunaftool words_suff_pruned.aff words_suff_pruned.dic words_suff_pruned2.arul
           ./rul2aff words_suff_pruned2.arul > words_suff_pruned2.aff
 
-      - name: Generate a dictionary
+      - name: Generate the final dictionary
         run: |
           ./hunaftool -v words_suff_pruned2.aff words.txt words_suff_pruned2.dic
           ls -l words_suff_pruned2.dic
