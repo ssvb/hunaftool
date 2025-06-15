@@ -104,5 +104,11 @@ end
 
 if log_rejected
   # TODO
-  log_rejected.puts
+  suff_flags.chars.each do |ch|
+    freq, data = t.dfs
+    break if data.size == 0
+    data.each do |str|
+      log_rejected.puts str
+    end
+  end
 end
