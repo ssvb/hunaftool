@@ -36,7 +36,7 @@ class Trie
     strip = "" if strip == "0"
     add = "" if add == "0"
     return if strip == "" || add == ""
-#    return if strip.size < 2
+    return if strip.size < 2
     node = @root
     strip.each_char do |char|
       next unless children = node.children
