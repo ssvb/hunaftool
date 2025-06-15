@@ -11,76 +11,98 @@ suff_flags += comb_flags
 
 suff_flags = suff_flags.chars.sort.uniq.first(75).join
 
-def independent?(a, b)
-  a, b = b, a if b[0].size > a[0].size
-  return a[0][-b[0].size, b[0].size] != b[0]
-end
+class TrieNode
+  def children     ; @children end
+  def affixes      ; @affixes end
 
-def try_add_rule(rules, rule)
-  bad = false
-  rules.each {|oldrule|
-    unless independent?(oldrule, rule)
-      bad = true
-      break
-    end
-  }
-  unless bad
-    rules << rule
-    return true
+  @affixes = [{strip: "", add: "", freq: 0, str: ""}].clear
+  def initialize
+    @children = {'a' => self || TrieNode.new}.clear
+    @affixes = [{strip: "", add: "", freq: 0, str: ""}].clear
   end
-  return false
 end
 
-rulesets = [[[""]]].clear
+class Trie
+  def initialize
+    @root = TrieNode.new
+  end
+
+  def insert(str) # strip, add, freq)
+    return unless str =~ /^([PS]FX)\s+\?\s+(\S+)\s+(\S+)\s+\.\s+\#(\d+)/
+    type  = $1
+    strip = (type == "SFX" ? $2.reverse : $2)
+    add   = $3
+    freq  = $4.to_i
+    strip = "" if strip == "0"
+    add = "" if add == "0"
+    return if strip == "" || add == ""
+#    return if strip.size < 2
+    node = @root
+    strip.each_char do |char|
+      next unless children = node.children
+      children[char] ||= TrieNode.new
+      node = children[char]
+    end
+    node.affixes.push({strip: strip, add: add, freq: freq, str: str})
+  end
+
+  def dfs(remove = true, node = @root)
+    total_child_freq = 0
+    total_child_strs = [""].clear
+
+    children = node.children
+    return 0, [""].clear unless children
+      children.each_value do |child|
+        child_freq, child_strs = dfs(false, child)
+        total_child_freq += child_freq || 0
+        total_child_strs += child_strs
+      end
+
+    if node.affixes.size > 0
+      if total_child_freq >= (node.affixes.first[:freq] || 0)
+        children.each_value {|child| dfs(true, child) } if remove
+        return total_child_freq, total_child_strs
+      else
+        if remove
+          tmp = node.affixes.shift
+          return tmp[:freq], [tmp[:str]]
+        else
+          return node.affixes.first[:freq], [node.affixes.first[:str]]
+        end
+      end
+    end
+
+    children.each_value {|child| dfs(true, child) } if remove
+    return total_child_freq, total_child_strs
+  end
+end
+
+input = File.open(ARGV[0])
+
+t = Trie.new
+input.each_line do |l|
+  t.insert(l)
+end
 
 log_rejected = nil
 if ARGV.size >= 2
   log_rejected = File.open(ARGV[1], "w")
 end
 
-linenum = 0
-lastline = 0
-File.open(ARGV[0]).each_line do |l|
-  linenum += 1
-  a = l.strip.split
-  next unless a[0] == "SFX"
+puts "SET UTF-8"
+puts "WORDCHARS -ʼ’'"
 
-  next if a[2] == "0" || a[3] == "0" || a[2].size < 2
+suff_flags.chars.each do |ch|
+  freq, data = t.dfs
+  break if data.size == 0
 
-  a = [a[2], a[3], a[0]]
-
-  done = false
-  rulesets.each {|ruleset|
-    if try_add_rule(ruleset, a)
-      done = true
-      break
-    end
-  }
-
-  lastline = linenum if done
-
-  unless done
-    if rulesets.size < suff_flags.size
-      rulesets.push([a])
-      lastline = linenum
-    else
-      if log_rejected
-        log_rejected.puts l.strip
-      end
-    end
+  puts "\nSFX #{ch} Y #{data.size}"
+  data.each do |str|
+    puts str.sub(/\?/, ch)
   end
 end
 
-puts "# used arul entries up to line #{lastline}"
-puts "SET UTF-8"
-puts "WORDCHARS -ʼ’'"
-puts
-
-rulesets.each_with_index do |ruleset, idx|
-  code = suff_flags[idx]
-  puts "#{ruleset[0][2]} #{code} Y #{ruleset.size}"
-  ruleset.sort {|a, b| a[1] == b[1] ? a[0] <=> b[0] : a[1] <=> b[1] }.each do |rule|
-    puts "#{rule[2]} #{code} #{rule[0]} #{rule[1]} ."
-  end
-  puts
+if log_rejected
+  # TODO
+  log_rejected.puts
 end
