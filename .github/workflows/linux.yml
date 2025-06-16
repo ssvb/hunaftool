@@ -89,9 +89,9 @@ jobs:
         run: |
           chmod +x hunaftool
           chmod +x rul2aff
-          ./rul2aff words_suff.arul word_suff_rejected.arul > words_suff.aff
+          ./rul2aff words_suff.arul > words_suff.aff
 
-      - name: Generate a dictionary
+      - name: Generate the initial dictionary
         run: |
           ./hunaftool -v words_suff.aff words.txt words.dic
           ls -l words.dic
@@ -99,48 +99,33 @@ jobs:
 
       - name: Distill a reduced .arul file
         run: |
-          ./hunaftool words_suff.aff words.dic words_suff_pruned.arul
-          cat word_suff_rejected.arul >> words_suff_pruned.arul
-          ./rul2aff words_suff_pruned.arul word_suff_rejected2.arul > words_suff_pruned.aff
+          ./hunaftool words_suff.aff words.dic words_pruned.arul
+          ./rul2aff words_pruned.arul > words_pruned.aff
 
-      - name: Generate a dictionary
-        run: |
-          ./hunaftool -v words_suff_pruned.aff words.txt words_suff_pruned.dic
-          ls -l words_suff_pruned.dic
-          wc -l words_suff_pruned.dic
-
-      - name: Distill a reduced .arul file, try2
-        run: |
-          ./hunaftool words_suff_pruned.aff words_suff_pruned.dic words_suff_pruned2.arul
-          ./rul2aff words_suff_pruned2.arul > words_suff_pruned2.aff
-
-      - name: Generate the final dictionary
-        run: |
-          ./hunaftool -v words_suff_pruned2.aff words.txt words_suff_pruned2.dic
-          ls -l words_suff_pruned2.dic
-          wc -l words_suff_pruned2.dic
-
-      - name: Prune unnecessary rules
-        run: ./hunaftool words_suff_pruned2.aff words_suff_pruned2.dic words_pruned.aff
-
-      - name: Generate a dictionary with pruned rules
+      - name: Generate the pruned dictionary
         run: |
           ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
           ls -l words_pruned.dic
           wc -l words_pruned.dic
+
+      - name: Prune unnecessary rules
+        run: |
+          ./hunaftool words_pruned.aff words_pruned.dic words_final.aff
+
+      - name: Generate the final dictionary
+        run: |
+          ./hunaftool -v words_final.aff words.txt words_final.dic
+          ls -l words_final.dic
+          wc -l words_final.dic
 
       - uses: actions/upload-artifact@v4
         with:
           name: words
           path: |
             words_suff.arul
-            words_suff_pruned.arul
             words_suff.aff
-            words_suff_pruned.aff
             words.dic
             words_pruned.aff
             words_pruned.dic
-            words_suff_pruned.aff
-            words_suff_pruned.dic
-            words_suff_pruned2.aff
-            words_suff_pruned2.dic
+            words_final.aff
+            words_final.dic
