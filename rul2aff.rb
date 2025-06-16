@@ -86,6 +86,7 @@ if ARGV.size >= 2
 end
 
 puts "SET UTF-8"
+puts "FULLSTRIP"
 puts "WORDCHARS -ʼ’'"
 
 flagspool.chars.each do |ch|
