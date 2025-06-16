@@ -702,8 +702,7 @@ class AFF
     if Cfg.arul?
       lines = [""].clear
       @@useful_rules.to_a.sort {|a, b| b[1] <=> a[1] }.each do |rule, freq|
-#        lines.push(rule.strip.gsub(/^([SP]FX\s+)\S+/, "\\1?") + "\t#" + freq.to_s) if freq > 1
-        lines.push(rule.strip.gsub(/^([SP]FX\s+)\S+/, "\\1?"))
+        lines.push(rule.strip.gsub(/^([SP]FX\s+)\S+/, "\\1?") + "\t#" + freq.to_s) if freq > 1
       end
       return lines.join("\n")
     else
