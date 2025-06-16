@@ -2,14 +2,10 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-suff_flags = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-pref_flags = "0123456789"
-comb_flags = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+MINSTRIP_SFX = 2
 
-suff_flags += pref_flags
-suff_flags += comb_flags
-
-suff_flags = suff_flags.chars.sort.uniq.first(75).join
+# 62 possible flags
+flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 class TrieNode
   def children     ; @children end
@@ -36,7 +32,7 @@ class Trie
     strip = "" if strip == "0"
     add = "" if add == "0"
     return if strip == "" || add == ""
-    return if strip.size < 2
+    return if type == "SFX" && strip.size < MINSTRIP_SFX
     node = @root
     strip.each_char do |char|
       next unless children = node.children
@@ -79,9 +75,9 @@ end
 
 input = File.open(ARGV[0])
 
-t = Trie.new
+sfx = Trie.new
 input.each_line do |l|
-  t.insert(l)
+  sfx.insert(l)
 end
 
 log_rejected = nil
@@ -92,8 +88,8 @@ end
 puts "SET UTF-8"
 puts "WORDCHARS -ʼ’'"
 
-suff_flags.chars.each do |ch|
-  freq, data = t.dfs
+flagspool.chars.each do |ch|
+  freq, data = sfx.dfs
   break if data.size == 0
 
   puts "\nSFX #{ch} Y #{data.size}"
@@ -103,12 +99,15 @@ suff_flags.chars.each do |ch|
 end
 
 if log_rejected
-  # TODO
-  suff_flags.chars.each do |ch|
-    freq, data = t.dfs
+  log_rej_lines = [{str: "", freq: 0}].clear
+  128.times do
+    freq, data = sfx.dfs
     break if data.size == 0
     data.each do |str|
-      log_rejected.puts str
+      if str =~ /\#(\d+)$/
+        log_rej_lines.push({str: str, freq: $1.to_i})
+      end
     end
   end
+  log_rej_lines.sort {|a, b| b[:freq] <=> a[:freq] }.each {|l| log_rejected.puts l[:str] }
 end
