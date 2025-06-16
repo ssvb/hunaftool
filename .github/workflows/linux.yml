@@ -96,6 +96,8 @@ jobs:
           ./hunaftool -v words_suff.aff words.txt words.dic
           ls -l words.dic
           wc -l words.dic
+          cat words_suff.aff words.dic > merged.txt
+          ls -l merged.txt
 
       - name: Distill a reduced .arul file
         run: |
@@ -107,6 +109,8 @@ jobs:
           ./hunaftool -v words_pruned.aff words.txt words_pruned.dic
           ls -l words_pruned.dic
           wc -l words_pruned.dic
+          cat words_pruned.aff words_pruned.dic > merged.txt
+          ls -l merged.txt
 
       - name: Prune unnecessary rules
         run: |
@@ -117,6 +121,8 @@ jobs:
           ./hunaftool -v words_final.aff words.txt words_final.dic
           ls -l words_final.dic
           wc -l words_final.dic
+          cat words_final.aff words_final.dic > merged.txt
+          ls -l merged.txt
 
       - uses: actions/upload-artifact@v4
         with:
