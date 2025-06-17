@@ -89,7 +89,7 @@ jobs:
         run: |
           chmod +x hunaftool
           chmod +x rul2aff
-          ./rul2aff words_suff.arul > words_suff.aff
+          ./rul2aff words_suff.arul words_suff.arul.rej > words_suff.aff
 
       - name: Generate the initial dictionary
         run: |
@@ -102,6 +102,7 @@ jobs:
       - name: Distill a reduced .arul file
         run: |
           ./hunaftool words_suff.aff words.dic words_pruned.arul
+          cat words_suff.arul.rej >> words_pruned.arul
           ./rul2aff words_pruned.arul > words_pruned.aff
 
       - name: Generate the pruned dictionary

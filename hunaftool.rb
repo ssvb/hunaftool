@@ -702,9 +702,13 @@ class AFF
     if Cfg.arul?
       lines = [""].clear
       @@useful_rules.to_a.sort {|a, b| b[1] <=> a[1] }.each do |rule, freq|
-        lines.push(rule.strip.gsub(/^([SP]FX\s+)\S+/, "\\1?") + "\t#" + freq.to_s) if freq > 1
+        if rule =~ /\t#/
+          lines.push(rule.strip.gsub(/^([SP]FX\s+)\S+/, "\\1?") + ", pf=" + freq.to_s)
+        else
+          lines.push(rule.strip.gsub(/^([SP]FX\s+)\S+/, "\\1?")) if freq > 1
+        end
       end
-      return lines.join("\n")
+      return lines.join("\n") + "\n"
     else
     curflag = ""
     curflagcnt = 0
@@ -735,7 +739,7 @@ class AFF
       lines[flaglineno] = (curflagcnt == 0) ? "" :
         lines[flaglineno].sub(/^([SP]FX\s+(\S+)\s+(\S+)\s+)(\S+)/, "\\1#{curflagcnt}")
     end
-    lines.join("\n")
+    lines.join("\n") + "\n"
     end
   end
 

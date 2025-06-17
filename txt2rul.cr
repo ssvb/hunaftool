@@ -121,9 +121,9 @@ pipe_through_coreutils_sort(["--field-separator=/", "--key=3,3nr", "--key=1,2", 
   rules_cnt = 0
   sort_output.each_line do |l|
     a = l.strip.split('/')
-    STDOUT.puts "SFX ? #{a[0] == "" ? "0" : a[0]} #{a[1] == "" ? "0" : a[1]} .\t##{a[2]}" if a[2].to_i > 1
+    STDOUT.puts "SFX ? #{a[0] == "" ? "0" : a[0]} #{a[1] == "" ? "0" : a[1]} .\t# tf=#{a[2]}" if a[2].to_i > 1
     if (rules_cnt += 1) >= RULES_LIMIT
-      STDERR.puts "! rules limit exceeded"
+      STDERR.puts "! Got the required number of rules. Stopping now."
       sort_output.close
       break
     end
