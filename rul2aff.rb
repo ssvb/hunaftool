@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
 MINSTRIP_SFX = 1
+MINADD_SFX   = 1
 
 # 62 possible flags
 flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -31,8 +32,8 @@ class Trie
     freq  = $4.to_i
     strip = "" if strip == "0"
     add = "" if add == "0"
-    return if strip == "" || add == ""
     return if type == "SFX" && strip.size < MINSTRIP_SFX
+    return if type == "SFX" && add.size < MINADD_SFX
     node = @root
     strip.each_char do |char|
       next unless children = node.children
