@@ -4,13 +4,13 @@
 
 MINSTRIP_SFX   = 0
 MINADD_SFX     = 1
-MINPF          = 8
+MINPF          = 10
 CHILD_WEIGHT_K = 0.0
 
 # 62 possible flags
-#flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 # 94 possible flags
-flagspool = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+#flagspool = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
 
 class TrieNode
   def children     ; @children end
