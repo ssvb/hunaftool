@@ -7,7 +7,7 @@ MINADD_SFX   = 1
 MINPF        = 8
 
 # 62 possible flags
-flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+flagspool = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 class TrieNode
   def children     ; @children end
