@@ -5,7 +5,7 @@
 MINSTRIP_SFX   = 0
 MINADD_SFX     = 1
 MINPF          = 7
-CHILD_WEIGHT_K = 0.0
+CHILD_WEIGHT_K = 0.75
 
 # 62 possible flags
 flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
