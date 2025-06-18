@@ -2,9 +2,10 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-MINSTRIP_SFX = 0
-MINADD_SFX   = 1
-MINPF        = 7
+MINSTRIP_SFX   = 0
+MINADD_SFX     = 1
+MINPF          = 7
+CHILD_WEIGHT_K = 0.5
 
 # 62 possible flags
 flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -81,22 +82,24 @@ class Trie
   end
 
   def dfs(remove = true, node = @root)
-    total_child_freq = 0
+    total_child_freq = 0.0
     total_child_strs = [""].clear
 
     children = node.children
     return 0, [""].clear unless children
 
+    child_weight_k = 1.0
     children.each_value do |child|
       child_freq, child_strs = dfs(false, child)
-      total_child_freq += child_freq || 0
+      total_child_freq += (child_freq || 0) * child_weight_k
+      child_weight_k *= CHILD_WEIGHT_K
       total_child_strs += child_strs
     end
 
     if node.affixes.size > 0
       if total_child_freq >= (node.affixes.first[:freq] || 0)
         children.each_value {|child| dfs(true, child) } if remove
-        return total_child_freq, total_child_strs
+        return total_child_freq.to_i, total_child_strs
       else
         if remove
           tmp = node.affixes.shift
@@ -108,7 +111,7 @@ class Trie
     end
 
     children.each_value {|child| dfs(true, child) } if remove
-    return total_child_freq, total_child_strs
+    return total_child_freq.to_i, total_child_strs
   end
 end
 
