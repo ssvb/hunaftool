@@ -2,9 +2,9 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-MINSTRIP_SFX = 2
+MINSTRIP_SFX = 1
 MINADD_SFX   = 1
-MINPF        = 8
+MINPF        = 7
 
 # 62 possible flags
 flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
