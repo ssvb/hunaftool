@@ -61,6 +61,7 @@ jobs:
           crystal build --release --static hunaftool.rb
           crystal build --release --static txt2rul.cr
           crystal build --release --static rul2aff.rb
+          crystal build --release --static flagsfreq.rb
 
       - name: Find promising suffix rule candidates
         run: TMPDIR=. ./txt2rul words.txt > words_suff.arul
@@ -72,6 +73,7 @@ jobs:
             hunaftool
             txt2rul
             rul2aff
+            flagsfreq
             words_suff.arul
 
   dict:
@@ -89,6 +91,7 @@ jobs:
         run: |
           chmod +x hunaftool
           chmod +x rul2aff
+          chmod +x flagsfreq
           ./rul2aff words_suff.arul > words_suff.aff
 
       - name: Generate the initial dictionary
@@ -124,6 +127,17 @@ jobs:
           cat words_final.aff words_final.dic > merged.txt
           ls -l merged.txt
 
+      - name: Create the most useful rules multibundle and use it under flag @
+        run: |
+          ./flagsfreq words_final.dic words_final.aff > best_multibundle.aff
+          cat words_final.aff best_multibundle.aff > words_final_opt1_wip.aff
+          ./hunaftool words_final_opt1_wip.aff words.txt words_final_opt1.dic
+          ./hunaftool words_final_opt1_wip.aff words_final_opt1.dic words_final_opt1.aff
+          ls -l words_final_opt1.dic
+          wc -l words_final_opt1.dic
+          cat words_final_opt1.aff words_final_opt1.dic > merged.txt
+          ls -l merged.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: words
@@ -135,3 +149,5 @@ jobs:
             words_pruned.dic
             words_final.aff
             words_final.dic
+            words_final_opt1.aff
+            words_final_opt1.dic
