@@ -127,15 +127,38 @@ jobs:
           cat words_final.aff words_final.dic > merged.txt
           ls -l merged.txt
 
-      - name: Create the most useful rules multibundle and use it under flag @
+      - name: Find and make use of the most useful rules bundle 1
         run: |
           ./flagsfreq words_final.dic words_final.aff > best_multibundle.aff
           cat words_final.aff best_multibundle.aff > words_final_opt1_wip.aff
-          ./hunaftool words_final_opt1_wip.aff words.txt words_final_opt1.dic
-          ./hunaftool words_final_opt1_wip.aff words_final_opt1.dic words_final_opt1.aff
-          ls -l words_final_opt1.dic
-          wc -l words_final_opt1.dic
-          cat words_final_opt1.aff words_final_opt1.dic > merged.txt
+          ./hunaftool words_final_opt1_wip.aff words.txt words_final.dic
+          ./hunaftool words_final_opt1_wip.aff words_final.dic words_final.aff
+          ls -l words_final.dic
+          wc -l words_final.dic
+          cat words_final.aff words_final.dic > merged.txt
+          ls -l merged.txt
+
+      - name: Find and make use of the most useful rules bundle 2
+        run: |
+          ./flagsfreq words_final.dic words_final.aff > best_multibundle.aff
+          cat words_final.aff best_multibundle.aff > words_final_opt1_wip.aff
+          ./hunaftool words_final_opt1_wip.aff words.txt words_final.dic
+          ./hunaftool words_final_opt1_wip.aff words_final.dic words_final.aff
+          ls -l words_final.dic
+          wc -l words_final.dic
+          cat words_final.aff words_final.dic > merged.txt
+          ls -l merged.txt
+
+
+      - name: Find and make use of the most useful rules bundle 3
+        run: |
+          ./flagsfreq words_final.dic words_final.aff > best_multibundle.aff
+          cat words_final.aff best_multibundle.aff > words_final_opt1_wip.aff
+          ./hunaftool words_final_opt1_wip.aff words.txt words_final.dic
+          ./hunaftool words_final_opt1_wip.aff words_final.dic words_final.aff
+          ls -l words_final.dic
+          wc -l words_final.dic
+          cat words_final.aff words_final.dic > merged.txt
           ls -l merged.txt
 
       - uses: actions/upload-artifact@v4
@@ -149,5 +172,3 @@ jobs:
             words_pruned.dic
             words_final.aff
             words_final.dic
-            words_final_opt1.aff
-            words_final_opt1.dic
