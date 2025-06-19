@@ -59,13 +59,23 @@ data3.each {|x|
   STDERR.puts x
 }
 
+# Find an unused flag
+flag = ""
+"!\"$%&'()*+,-./0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~".each_char do |ch|
+  if !freq.has_key?(ch)
+    flag = ch
+    break
+  end
+end
+
 out = [""].clear
 rulestomerge = data3[0][:flagfield]
 File.open(ARGV[1]).each_line {|l|
   if l =~ /\#\s+tf\=/ && l =~ /SFX\s+(\S+)/ && rulestomerge.index($1)
-    out.push(l.strip.sub(/SFX\s+(\S+)/, "SFX @"))
+    out.push(l.strip.sub(/SFX\s+(\S+)/, "SFX #{flag}"))
   end
 }
-puts "SFX @ Y #{out.size}"
+puts
+puts "SFX #{flag} Y #{out.size}"
 out.each {|l| puts l }
 # pp freq.to_a.sort {|a, b| a[1] <=> b[1] }
