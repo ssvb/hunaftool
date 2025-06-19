@@ -62,7 +62,7 @@ data3.each {|x|
 # Find an unused flag
 flag = ""
 "!\"$%&'()*+,-./0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~".each_char do |ch|
-  if !freq.has_key?(ch)
+  if !alphabet.has_key?(ch)
     flag = ch
     break
   end
