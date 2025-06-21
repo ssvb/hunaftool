@@ -7,8 +7,8 @@ MINADD_SFX     = 1
 MINPF          = 100
 CHILD_WEIGHT_K = 0.0
 
-# 62 possible flags
-flagspool = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+# 52 possible flags
+flagspool = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 # 94 possible flags
 #flagspool = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
 
