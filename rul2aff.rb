@@ -2,9 +2,9 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-MINSTRIP_SFX   = 0
+MINSTRIP_SFX   = 1
 MINADD_SFX     = 1
-MINPF          = 20
+MINPF          = 100
 CHILD_WEIGHT_K = 0.0
 
 # 62 possible flags
@@ -132,7 +132,6 @@ if ARGV.size >= 2
 end
 
 puts "SET UTF-8"
-puts "FULLSTRIP"
 puts "WORDCHARS -ʼ’'"
 
 flagspool.chars.each do |ch|
