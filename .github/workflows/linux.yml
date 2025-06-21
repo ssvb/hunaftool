@@ -127,39 +127,10 @@ jobs:
           cat words_final.aff words_final.dic > merged.txt
           ls -l merged.txt
 
-      - name: Find and make use of the most useful rules bundle 1
+      - name: Iteratively merge flags
         run: |
-          ./flagsfreq words_final.dic words_final.aff > best_multibundle.aff
-          cat words_final.aff best_multibundle.aff > words_final_opt1_wip.aff
-          ./hunaftool words_final_opt1_wip.aff words.txt words_final.dic
-          ./hunaftool words_final_opt1_wip.aff words_final.dic words_final.aff
-          ls -l words_final.dic
-          wc -l words_final.dic
-          cat words_final.aff words_final.dic > merged.txt
-          ls -l merged.txt
-
-      - name: Find and make use of the most useful rules bundle 2
-        run: |
-          ./flagsfreq words_final.dic words_final.aff > best_multibundle.aff
-          cat words_final.aff best_multibundle.aff > words_final_opt1_wip.aff
-          ./hunaftool words_final_opt1_wip.aff words.txt words_final.dic
-          ./hunaftool words_final_opt1_wip.aff words_final.dic words_final.aff
-          ls -l words_final.dic
-          wc -l words_final.dic
-          cat words_final.aff words_final.dic > merged.txt
-          ls -l merged.txt
-
-
-      - name: Find and make use of the most useful rules bundle 3
-        run: |
-          ./flagsfreq words_final.dic words_final.aff > best_multibundle.aff
-          cat words_final.aff best_multibundle.aff > words_final_opt1_wip.aff
-          ./hunaftool words_final_opt1_wip.aff words.txt words_final.dic
-          ./hunaftool words_final_opt1_wip.aff words_final.dic words_final.aff
-          ls -l words_final.dic
-          wc -l words_final.dic
-          cat words_final.aff words_final.dic > merged.txt
-          ls -l merged.txt
+          sudo apt-get install ruby
+          ruby iterative-flags-merge.rb
 
       - uses: actions/upload-artifact@v4
         with:
