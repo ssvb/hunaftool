@@ -14,7 +14,7 @@ while true
   STDERR.puts`wc -l words_final.dic`
   `cat words_final.aff words_final.dic > merged.txt`
   STDERR.puts`ls -l merged.txt`
-  if round >= 25
+  if round >= 100
     STDERR.puts "== Too many rounds, stopping =="
     break
   end
