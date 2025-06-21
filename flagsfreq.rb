@@ -60,7 +60,7 @@ data3.each {|x| STDERR.puts x }
 
 # Find an unused flag
 flag = ""
-"!\"$%&'()*+,-./0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~".each_char do |ch|
+"!\"$%&'()*+,-0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~".each_char do |ch|
   if !alphabet.has_key?(ch)
     flag = ch
     break
