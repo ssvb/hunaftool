@@ -57,7 +57,7 @@ jobs:
 
       - name: Install Crystal and Zstandard
         run: |
-          sudo apt-get update && sudo apt-get install crystal zstd -y
+          sudo apt-get install crystal zstd -y
           crystal build --release --static hunaftool.rb
           crystal build --release --static txt2rul.cr
           crystal build --release --static rul2aff.rb
@@ -86,6 +86,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: words_suff_arul
+
+      - name: Install Hunspell command line tool and Ruby
+        run: |
+          sudo apt-get install ruby hunspell
 
       - name: Assemble an affix file from the rules
         run: |
@@ -126,11 +130,14 @@ jobs:
           wc -l words_final.dic
           cat words_final.aff words_final.dic > merged.txt
           ls -l merged.txt
+          time hunspell -d words_final -l words.txt
+          time hunspell -d words_final -l words.txt
 
-      - name: Iteratively merge flags
+      - name: Iteratively merge flags and benchmark/test with Hunspell
         run: |
-          sudo apt-get install ruby
           ruby iterative-flags-merge.rb
+          time hunspell -d words_final -l words.txt
+          time hunspell -d words_final -l words.txt
 
       - uses: actions/upload-artifact@v4
         with:
