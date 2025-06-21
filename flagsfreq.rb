@@ -28,7 +28,21 @@ flagfields.sort.uniq.each do |flagfield|
   data.push({flagfield: flagfield, val: flagbits})
 end
 
-data2 = [{flagfield: "", saving: 0}].clear
+data2 = [{flagfield: "", saving: 0, realsaving: 0}].clear
+
+flagcosts = {'a' => 0}.clear
+
+File.open(ARGV[1]).each_line {|l|
+  if l =~ /^(SFX\s+(\S+).*?)\#\s+tf\=/ && $2.chars.size == 1
+    rulecost = $1.size
+    flagname = $2.chars.first
+    flagcosts[flagname] = flagcosts.fetch(flagname, 0) + rulecost
+  end
+}
+
+# The cost in bytes of the affix rules in the.aff file related to this flag
+flagfield_cost = {"" => 0}.clear
+flagfield_freq.each {|k, v| flagfield_cost[k] = k.chars.map {|ch| flagcosts[ch] }.sum }
 
 0.upto(data.size - 1) do |i|
   saving = 0
@@ -38,10 +52,10 @@ data2 = [{flagfield: "", saving: 0}].clear
       saving += (data[i][:flagfield].size - 1) * flagfield_freq[data[j][:flagfield]]
     end
   end
-  data2.push({flagfield: data[i][:flagfield], saving: saving})
+  data2.push({flagfield: data[i][:flagfield], saving: saving, realsaving: saving - flagfield_cost[data[i][:flagfield]]})
 end
 
-data3 = data2.sort {|a, b| b[:saving].to_f / b[:flagfield].size <=> a[:saving].to_f / a[:flagfield].size }.first(10)
+data3 = data2.sort {|a, b| b[:realsaving] <=> a[:realsaving] }.first(10)
 data3.each {|x| STDERR.puts x }
 
 # Find an unused flag
@@ -53,6 +67,8 @@ flag = ""
   end
 end
 
+exit 1 if flag == "" # failed to find an unused flag
+
 out = [""].clear
 rulestomerge = data3[0][:flagfield]
 File.open(ARGV[1]).each_line {|l|
@@ -63,3 +79,6 @@ File.open(ARGV[1]).each_line {|l|
 puts
 puts "SFX #{flag} Y #{out.size}"
 out.each {|l| puts l }
+
+exit 1 if data3[0][:realsaving] <= 0
+exit 0
