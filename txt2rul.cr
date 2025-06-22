@@ -6,7 +6,7 @@ DESIRED_MIN_STRIP_SIZE = 3
 # allow to have a condition field up to this size for zero affixes
 KEEP_COND_SIZE         = 1
 # the maximum number of affixes for a single stem
-MAX_STEM_AFFIXES       = 100
+MAX_STEM_AFFIXES       = 1000
 # the number of rules
 RULES_LIMIT            = 1000000
 
