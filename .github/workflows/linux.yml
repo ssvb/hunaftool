@@ -89,7 +89,7 @@ jobs:
 
       - name: Install Hunspell command line tool and Ruby
         run: |
-          sudo apt-get install ruby hunspell
+          sudo apt-get install ruby hunspell heaptrack
 
       - name: Assemble an affix file from the rules
         run: |
@@ -132,12 +132,14 @@ jobs:
           ls -l merged.txt
           time hunspell -d words_final -l words.txt
           time hunspell -d words_final -l words.txt
+          ruby heapusage.rb words_final words.txt
 
       - name: Iteratively merge flags and benchmark/test with Hunspell
         run: |
           ruby iterative-flags-merge.rb
           time hunspell -d words_final -l words.txt
           time hunspell -d words_final -l words.txt
+          ruby heapusage.rb words_final words.txt
 
       - uses: actions/upload-artifact@v4
         with:
