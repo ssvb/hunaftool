@@ -32,7 +32,7 @@ class Trie
   end
 
   def insert(str) # strip, add, freq)
-    return unless str =~ /^([PS]FX)\s+\?\s+(\S+)\s+(\S+)\s+\.\s+\#\s*(.*)/
+    return unless str =~ /^([PS]FX)\s+\?\s+(\S+)\s+(\S+)\s+(\S+)\s+\#\s*(.*)/
     type  = $1
     strip = (type == "SFX" ? $2.reverse : $2)
     add   = $3
@@ -41,9 +41,13 @@ class Trie
     return if type == "SFX" && strip.size < MINSTRIP_SFX
     return if type == "SFX" && add.size < MINADD_SFX
 
+    cond = $4
+    cond = strip if cond == "."
+    abort "! malformed '#{str}'\n" unless cond == strip
+
     freq = 0
     pfreq = 0
-    extradata = $4.split(/\s*,\s*/)
+    extradata = $5.split(/\s*,\s*/)
     extradata.each do |entry|
       if entry =~ /(.*)=(.*)/
         varname = $1
