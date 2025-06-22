@@ -42,7 +42,11 @@ class Trie
     return if type == "SFX" && add.size < MINADD_SFX
 
     cond = $4
-    cond = strip if cond == "."
+    if cond == "."
+      cond = strip
+    else
+      cond = cond.reverse if type == "SFX"
+    end
     abort "! malformed '#{str}'\n" unless cond == strip
 
     freq = 0
