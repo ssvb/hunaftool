@@ -11,6 +11,7 @@ File.open(ARGV[0]).each_line do |l|
     flagfield_freq[$1] = flagfield_freq.fetch($1, 0) + 1
   end
 end
+flagfields = flagfields.sort.uniq
 
 # Used single character flags
 alphabet = {'a' => true}.clear
@@ -38,30 +39,41 @@ File.open(ARGV[1]).each_line {|l|
 
 data = [{flagfield: "", val: I128_0}].clear
 
+# split PFX and SFX flags
+flagfield_split_freq = {"" => 0}.clear
+flagfields.each {|flagfield|
+  freq = flagfield_freq[flagfield]
+  flagfield_sfx = flagfield.chars.select {|ch| flagcosts_sfx.has_key?(ch) }.join
+  flagfield_pfx = flagfield.chars.select {|ch| flagcosts_pfx.has_key?(ch) }.join
+  flagfield_split_freq[flagfield_sfx] = freq + flagfield_split_freq.fetch(flagfield_sfx, 0) unless flagfield_sfx.empty?
+  flagfield_split_freq[flagfield_pfx] = freq + flagfield_split_freq.fetch(flagfield_pfx, 0) unless flagfield_pfx.empty?
+}
+flagfield_freq = flagfield_split_freq
+
 flagfields.map {|flagfield| flagfield.chars.select {|ch| flagcosts_sfx.has_key?(ch) }.join }.sort.uniq.each do |flagfield|
   flagbits = I128_0
   flagfield.each_char {|ch| flagbits |= ((I128_0 + 1) << name_to_idx[ch]) }
-  data.push({flagfield: flagfield, val: flagbits})
+  data.push({flagfield: flagfield, val: flagbits}) unless flagfield.empty?
 end
 
-data2 = [{flagfield: "", saving: 0, realsaving: 0}].clear
+data2 = [{flagfield: "", dicsaving: 0, totalsaving: 0}].clear
 
 # The cost in bytes of the affix rules in the.aff file related to this flag
 flagfield_cost = {"" => 0}.clear
-flagfield_freq.each {|k, v| flagfield_cost[k] = k.chars.map {|ch| flagcosts_sfx[ch] }.sum }
+flagfield_freq.each {|k, v| flagfield_cost[k] = k.chars.map {|ch| flagcosts_sfx.fetch(ch, nil) || flagcosts_pfx.fetch(ch, nil) || 0 }.sum }
 
 0.upto(data.size - 1) do |i|
-  saving = 0
+  dicsaving = 0
   0.upto(data.size - 1) do |j|
     if (data[j][:val] & data[i][:val]) == data[i][:val]
       # i is a full subset of j
-      saving += (data[i][:flagfield].size - 1) * flagfield_freq[data[j][:flagfield]]
+      dicsaving += (data[i][:flagfield].size - 1) * flagfield_freq[data[j][:flagfield]]
     end
   end
-  data2.push({flagfield: data[i][:flagfield], saving: saving, realsaving: saving - flagfield_cost[data[i][:flagfield]]})
+  data2.push({flagfield: data[i][:flagfield], dicsaving: dicsaving, totalsaving: dicsaving - flagfield_cost[data[i][:flagfield]]})
 end
 
-data3 = data2.sort {|a, b| b[:realsaving] <=> a[:realsaving] }.first(10)
+data3 = data2.sort {|a, b| b[:totalsaving] <=> a[:totalsaving] }.first(10)
 data3.each {|x| STDERR.puts x }
 
 # Find an unused flag
@@ -86,5 +98,5 @@ puts
 puts "SFX #{flag} Y #{out.size}"
 out.each {|l| puts l }
 
-exit 1 if data3[0][:realsaving] <= 0
+exit 1 if data3[0][:totalsaving] <= 0
 exit 0
