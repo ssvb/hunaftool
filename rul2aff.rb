@@ -153,6 +153,7 @@ flagspool_pfx.chars.each do |ch|
       puts str.sub(/\?/, ch)
     end
   end
+end
 
 flagspool_sfx.chars.each do |ch|
   freq, data = sfx.dfs
