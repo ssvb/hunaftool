@@ -1,4 +1,4 @@
-## 
+## Crystal
 
 Hunaftool is implemented using a common subset of Ruby and Crystal.
 
@@ -47,7 +47,7 @@ U8_0 = "\0".bytes.first
 a = [U8_0] * 1000000000 # This allocates a 1 GB array of bytes in RAM without wastage
 ```
 
-### Tuples
+### Crystal tuples without breaking compatibility with Ruby
 
 The standard way of getting the maximum of two values:
 
@@ -55,7 +55,7 @@ The standard way of getting the maximum of two values:
 z = [x, y].max
 ```
 
-But how do we avoid expensive dynamic memory allocations from the GC. This way:
+Except that this is slow, because dynamic memory allocation. Can we do something to address this? Yes:
 
 ```Ruby
 def tuple2(a, b)
