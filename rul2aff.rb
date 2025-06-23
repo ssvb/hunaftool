@@ -4,7 +4,7 @@
 
 MINSTRIP_SFX   = 1
 MINADD_SFX     = 1
-MINPF          = 10
+MINPF          = 50
 CHILD_WEIGHT_K = 0.0
 
 # 52 possible flags
