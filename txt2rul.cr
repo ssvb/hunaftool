@@ -13,7 +13,7 @@ RULES_LIMIT            = 1000000
 module Cfg
   @@prefix_mode = false
   def self.prefix_mode?   ; @@prefix_mode end
-  def self.prefix_mode(v) ; @@prefix_mode = v end
+  def self.prefix_mode=(v) ; @@prefix_mode = v end
 end
 
 args = ARGV.select do |arg|
@@ -82,7 +82,7 @@ def affcombs(stem, affixes)
     end
 end
 
-def affixpairs
+def affixpairs(args)
   pipe_through_coreutils_sort do |sort_input, sort_output|
     File.open(args[0]).each_line do |l|
       l = l.strip
@@ -110,9 +110,9 @@ def affixpairs
   end
 end
 
-def combine_counters
+def combine_counters(args)
   pipe_through_coreutils_sort do |sort_input, sort_output|
-    affixpairs do |affcomb|
+    affixpairs(args) do |affcomb|
       sort_input.puts affcomb
     end
     sort_input.close
@@ -138,7 +138,7 @@ end
 STDOUT.flush_on_newline = false
 STDOUT.sync = false
 pipe_through_coreutils_sort(["--field-separator=/", "--key=3,3nr", "--key=1,2", "--compress-program=zstd"]) do |sort_input, sort_output|
-  combine_counters do |l|
+  combine_counters(args) do |l|
     sort_input.puts l
   end
   sort_input.close
