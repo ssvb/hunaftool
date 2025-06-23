@@ -6,7 +6,7 @@ MINSTRIP_PFX   = 0
 MINADD_PFX     = 1
 MINSTRIP_SFX   = 1
 MINADD_SFX     = 1
-MINPF          = 20
+MINPF          = 10
 
 # 15 possible flags
 flagspool_pfx = "0123456789+-*%="
