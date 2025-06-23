@@ -10,6 +10,27 @@ MAX_STEM_AFFIXES       = 1000
 # the number of rules
 RULES_LIMIT            = 1000000
 
+module Cfg
+  @@prefix_mode = false
+  def self.prefix_mode?   ; @@prefix_mode end
+  def self.prefix_mode(v) ; @@prefix_mode = v end
+end
+
+args = ARGV.select do |arg|
+  if arg =~ /^\-p$/
+    Cfg.prefix_mode = true
+    nil
+  elsif arg =~ /^\-/
+    abort "Unrecognized command line option: '#{arg}'\n"
+  else
+    arg
+  end
+end
+
+unless args.size >= 1
+  abort "Need file name in the command line (with the list of words)"
+end
+
 # Yield all possible ways of splitting the word into stem/affix pairs
 def affix_variants(word)
   0.upto(word.size) do |affsize|
@@ -63,7 +84,11 @@ end
 
 def affixpairs
   pipe_through_coreutils_sort do |sort_input, sort_output|
-    File.open(ARGV[0]).each_line do |l|
+    File.open(args[0]).each_line do |l|
+      l = l.strip
+      if Cfg.prefix_mode?
+        l = l.reverse
+      end
       affix_variants(l) do |sepaffix|
         sort_input.puts sepaffix
       end
@@ -121,7 +146,13 @@ pipe_through_coreutils_sort(["--field-separator=/", "--key=3,3nr", "--key=1,2", 
   rules_cnt = 0
   sort_output.each_line do |l|
     a = l.strip.split('/')
-    STDOUT.puts "SFX ? #{a[0] == "" ? "0" : a[0]} #{a[1] == "" ? "0" : a[1]} #{a[0] == "" ? "." : a[0]}\t# tf=#{a[2]}" if a[2].to_i > 1
+    if Cfg.prefix_mode?
+      a[0] = a[0].reverse
+      a[1] = a[1].reverse
+      STDOUT.puts "PFX ? #{a[0] == "" ? "0" : a[0]} #{a[1] == "" ? "0" : a[1]} #{a[0] == "" ? "." : a[0]}\t# tf=#{a[2]}" if a[2].to_i > 1
+    else
+      STDOUT.puts "SFX ? #{a[0] == "" ? "0" : a[0]} #{a[1] == "" ? "0" : a[1]} #{a[0] == "" ? "." : a[0]}\t# tf=#{a[2]}" if a[2].to_i > 1
+    end
     if (rules_cnt += 1) >= RULES_LIMIT
       STDERR.puts "! Got the required number of rules. Stopping now."
       sort_output.close

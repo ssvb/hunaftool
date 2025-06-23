@@ -2,15 +2,15 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
+MINSTRIP_PFX   = 0
+MINADD_PFX     = 1
 MINSTRIP_SFX   = 1
 MINADD_SFX     = 1
 MINPF          = 50
-CHILD_WEIGHT_K = 0.0
 
 # 52 possible flags
-flagspool = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-# 94 possible flags
-#flagspool = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+flagspool_pfx = "0123456789"
+flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 class TrieNode
   def children     ; @children end
@@ -40,6 +40,8 @@ class Trie
     add = "" if add == "0"
     return if type == "SFX" && strip.size < MINSTRIP_SFX
     return if type == "SFX" && add.size < MINADD_SFX
+    return if type == "PFX" && strip.size < MINSTRIP_PFX
+    return if type == "PFX" && add.size < MINADD_PFX
 
     cond = $4
     if cond == "."
@@ -102,7 +104,7 @@ class Trie
     children.each_value do |child|
       child_freq, child_strs = dfs(false, child)
       total_child_freq += (child_freq || 0) * child_weight_k
-      child_weight_k *= CHILD_WEIGHT_K
+      child_weight_k *= 0.0
       total_child_strs += child_strs
     end
 
@@ -128,41 +130,37 @@ end
 input = File.open(ARGV[0])
 
 sfx = Trie.new
+pfx = Trie.new
 input.each_line do |l|
-  sfx.insert(l)
+  if l =~ /^PFX/
+    pfx.insert(l)
+  else
+    sfx.insert(l)
+  end
 end
 
 sfx.dfs_sort
-
-log_rejected = nil
-if ARGV.size >= 2
-  log_rejected = File.open(ARGV[1], "w")
-end
+pfx.dfs_sort
 
 puts "SET UTF-8"
-puts "WORDCHARS -ʼ’'"
+puts "WORDCHARS -’"
 
-flagspool.chars.each do |ch|
-  freq, data = sfx.dfs
-  break if data.size == 0
-
-  puts "\nSFX #{ch} Y #{data.size}"
-  data.each do |str|
-    puts str.sub(/\?/, ch)
-  end
-end
-
-if log_rejected
-  log_rej_lines = [{str: "", freq: 0}].clear
-  128.times do
-    freq, data = sfx.dfs
-    break if data.size == 0
+flagspool_pfx.chars.each do |ch|
+  freq, data = pfx.dfs
+  if data.size > 0
+    puts "\nPFX #{ch} Y #{data.size}"
     data.each do |str|
-      if str =~ /\# tf=(\d+)/
-        log_rej_lines.push({str: str, freq: $1.to_i})
-      end
+      puts str.sub(/\?/, ch)
     end
   end
-  log_rej_lines.sort {|a, b| b[:freq] <=> a[:freq] }.each {|l| log_rejected.puts l[:str] }
-  log_rejected.close
+
+flagspool_sfx.chars.each do |ch|
+  freq, data = sfx.dfs
+  if data.size > 0
+    puts "\nSFX #{ch} Y #{data.size}"
+    data.each do |str|
+      puts str.sub(/\?/, ch)
+    end
+  end
+  puts
 end
