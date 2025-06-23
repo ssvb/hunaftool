@@ -190,8 +190,7 @@ jobs:
           name: words
           path: |
             words_suff.arul
-            words_suff.aff
-            words.dic
+            words_pref.arul
             words_pruned.aff
             words_pruned.dic
             words_final.aff

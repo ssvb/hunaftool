@@ -8,8 +8,9 @@ MINSTRIP_SFX   = 1
 MINADD_SFX     = 1
 MINPF          = 50
 
+# 15 possible flags
+flagspool_pfx = "0123456789+-*%="
 # 52 possible flags
-flagspool_pfx = "0123456789"
 flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 class TrieNode
