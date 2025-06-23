@@ -2,16 +2,16 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-MINSTRIP_PFX   = 1
+MINSTRIP_PFX   = 0
 MINADD_PFX     = 1
 MINSTRIP_SFX   = 1
 MINADD_SFX     = 1
 MINPF          = 10
 
-# 15 possible flags
-flagspool_pfx = "0123456789+-*%="
-# 52 possible flags
-flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+# 20 possible flags
+flagspool_pfx = "0123456789+-*%=qrstuvwxyz"
+# 42 possible flags
+flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop"
 
 class TrieNode
   def children     ; @children end
