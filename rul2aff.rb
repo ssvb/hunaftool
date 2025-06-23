@@ -2,7 +2,7 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-MINSTRIP_PFX   = 0
+MINSTRIP_PFX   = 1
 MINADD_PFX     = 1
 MINSTRIP_SFX   = 1
 MINADD_SFX     = 1
