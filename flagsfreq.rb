@@ -20,9 +20,25 @@ idx_to_name = alphabet.keys.sort.uniq
 name_to_idx = {'a' => 0}.clear
 idx_to_name.each_with_index {|val, idx| name_to_idx[val] = idx }
 
+flagcosts_sfx = {'a' => 0}.clear
+flagcosts_pfx = {'a' => 0}.clear
+
+File.open(ARGV[1]).each_line {|l|
+  if l =~ /^(SFX\s+(\S+).*?)\#\s+tf\=/ && $2.chars.size == 1
+    rulecost = $1.size
+    flagname = $2.chars.first
+    flagcosts_sfx[flagname] = flagcosts_sfx.fetch(flagname, 0) + rulecost
+  end
+  if l =~ /^(PFX\s+(\S+).*?)\#\s+tf\=/ && $2.chars.size == 1
+    rulecost = $1.size
+    flagname = $2.chars.first
+    flagcosts_pfx[flagname] = flagcosts_pfx.fetch(flagname, 0) + rulecost
+  end
+}
+
 data = [{flagfield: "", val: I128_0}].clear
 
-flagfields.sort.uniq.each do |flagfield|
+flagfields.map {|flagfield| flagfield.chars.select {|ch| flagcosts_sfx.has_key?(ch) }.join }.sort.uniq.each do |flagfield|
   flagbits = I128_0
   flagfield.each_char {|ch| flagbits |= ((I128_0 + 1) << name_to_idx[ch]) }
   data.push({flagfield: flagfield, val: flagbits})
@@ -30,19 +46,9 @@ end
 
 data2 = [{flagfield: "", saving: 0, realsaving: 0}].clear
 
-flagcosts = {'a' => 0}.clear
-
-File.open(ARGV[1]).each_line {|l|
-  if l =~ /^(SFX\s+(\S+).*?)\#\s+tf\=/ && $2.chars.size == 1
-    rulecost = $1.size
-    flagname = $2.chars.first
-    flagcosts[flagname] = flagcosts.fetch(flagname, 0) + rulecost
-  end
-}
-
 # The cost in bytes of the affix rules in the.aff file related to this flag
 flagfield_cost = {"" => 0}.clear
-flagfield_freq.each {|k, v| flagfield_cost[k] = k.chars.map {|ch| flagcosts[ch] }.sum }
+flagfield_freq.each {|k, v| flagfield_cost[k] = k.chars.map {|ch| flagcosts_sfx[ch] }.sum }
 
 0.upto(data.size - 1) do |i|
   saving = 0
