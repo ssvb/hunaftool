@@ -46,3 +46,21 @@ U8_0 = "\0".bytes.first
 
 a = [U8_0] * 1000000000 # This allocates a 1 GB array of bytes in RAM without wastage
 ```
+
+### Tuples
+
+The standard way of getting the maximum of two values:
+
+```Ruby
+z = [x, y].max
+```
+
+But how do we avoid expensive dynamic memory allocations from the GC. This way:
+
+```Ruby
+def tuple2(a, b)
+  return a, b
+end
+
+z = tuple2(x, y).max
+```
