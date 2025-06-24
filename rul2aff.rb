@@ -2,11 +2,12 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-MINSTRIP_PFX   = 0
-MINADD_PFX     = 1
-MINSTRIP_SFX   = 1
-MINADD_SFX     = 1
-MINPF          = 10
+MINSTRIP_PFX    = 0
+MINADD_PFX      = 1
+MINSTRIP_SFX    = 1
+MINADD_SFX      = 1
+MINPF           = 10
+GROUP_MERGEABLE = true
 
 # 20 possible flags
 flagspool_pfx = "0123456789+-*%=qrstuvwxyz"
@@ -113,9 +114,9 @@ class Trie
     node.affixes.sort! {|a, b| b[:freq] == a[:freq] ? b[:pfreq] <=> a[:pfreq] : b[:freq] <=> a[:freq] }
   end
 
-  def dfs(remove = true, node = @root, cherry_pick = {mstrip: "", madd: ""})
+  def dfs(remove = true, node = @root, cherry_pick = { {mstrip: "", madd: ""} => true })
     node.affixes.each_with_index do |entry, idx|
-      if entry[:mstrip].size == cherry_pick[:mstrip] && entry[:madd] == cherry_pick[:madd]
+      if cherry_pick.has_key?({mstrip: entry[:mstrip], madd: entry[:madd]})
         node.affixes.delete_at(idx) if remove
         return entry[:freq], [entry]
       end
@@ -197,16 +198,10 @@ puts "WORDCHARS -’"
 def gen(trie, flagspool, mergeable, cmd)
 flagspool.chars.each do |ch|
   freq, data = trie.dfs(false)
-  cherry_pick = {mstrip: "", madd: ""}
-  bestscore = 0
+  cherry_pick = { {mstrip: "", madd: ""} => true }.clear
   data.each do |entry|
-    if mergeable[{mstrip: entry[:mstrip], madd: entry[:madd]}].size > 1
-      score = mergeable[{mstrip: entry[:mstrip], madd: entry[:madd]}].map {|entry, _| entry[:freq] }.sum
-      if score > bestscore
-        cherry_pick = {mstrip: entry[:mstrip], madd: entry[:madd]}
-        bestscore = score
-      end
-    end
+    k = {mstrip: entry[:mstrip], madd: entry[:madd]}
+    cherry_pick[k] = true if mergeable[k].size > 1 && GROUP_MERGEABLE
   end
   if data.size > 0
     freq, data = trie.dfs(true, trie.root, cherry_pick)
