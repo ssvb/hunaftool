@@ -7,12 +7,12 @@ MINADD_PFX      = 1
 MINSTRIP_SFX    = 1
 MINADD_SFX      = 1
 MINPF           = 10
-GROUP_MERGEABLE = true
+GROUP_MERGEABLE = false
 
-# 20 possible flags
-flagspool_pfx = "0123456789+-*%=qrstuvwxyz"
-# 42 possible flags
-flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop"
+# 15 possible flags for prefixes
+flagspool_pfx = "0123456789+-*%="
+# 52 possible flags for suffixes
+flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 class TrieNode
   def children     ; @children end
