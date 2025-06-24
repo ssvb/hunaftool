@@ -17,10 +17,10 @@ class TrieNode
   def children     ; @children end
   def affixes      ; @affixes end
 
-  @affixes = [{strip: "", add: "", madd: "", freq: 0, pfreq: 0, str: ""}].clear
+  @affixes = [{strip: "", add: "", mstrip: "", madd: "", freq: 0, pfreq: 0, str: ""}].clear
   def initialize
     @children = {'a' => self || TrieNode.new}.clear
-    @affixes = [{strip: "", add: "", madd: "", freq: 0, pfreq: 0, str: ""}].clear
+    @affixes = [{strip: "", add: "", mstrip: "", madd: "", freq: 0, pfreq: 0, str: ""}].clear
   end
 end
 
@@ -47,11 +47,17 @@ class Trie
     return if type == "PFX" && add.size < MINADD_PFX
 
     tmp1 = strip.chars
+    tmp1 = tmp1.reverse if type == "SFX"
     tmp2 = add.chars
+    if type == "PFX"
+      tmp1 = tmp1.reverse
+      tmp2 = tmp2.reverse
+    end
     while tmp1.size > 0 && tmp2.size > 0 && tmp1[0] == tmp2[0]
       tmp1.shift
       tmp2.shift
     end
+    mstrip = tmp1.join
     madd = tmp2.join
 
     cond = $4
@@ -87,7 +93,7 @@ class Trie
         end
       end
     end
-    return {strip: strip, add: add, madd: madd, freq: freq, pfreq: pfreq, str: str}
+    return {strip: strip, add: add, mstrip: mstrip, madd: madd, freq: freq, pfreq: pfreq, str: str}
   end
 
   def insert(entry)
@@ -107,16 +113,16 @@ class Trie
     node.affixes.sort! {|a, b| b[:freq] == a[:freq] ? b[:pfreq] <=> a[:pfreq] : b[:freq] <=> a[:freq] }
   end
 
-  def dfs(remove = true, node = @root, cherry_pick = {sizechange: 0, madd: ""})
+  def dfs(remove = true, node = @root, cherry_pick = {mstrip: "", madd: ""})
     node.affixes.each_with_index do |entry, idx|
-      if entry[:add].size - entry[:strip].size == cherry_pick[:sizechange] && entry[:madd] == cherry_pick[:madd]
+      if entry[:mstrip].size == cherry_pick[:mstrip] && entry[:madd] == cherry_pick[:madd]
         node.affixes.delete_at(idx) if remove
         return entry[:freq], [entry]
       end
     end
 
     total_child_freq = 0
-    total_child_entr = [{strip: "", add: "", madd: "", freq: 0, pfreq: 0, str: ""}].clear
+    total_child_entr = [{strip: "", add: "", mstrip: "", madd: "", freq: 0, pfreq: 0, str: ""}].clear
 
     children = node.children
     return 0, total_child_entr unless children
@@ -153,10 +159,10 @@ input = File.open(ARGV[0])
 sfx = Trie.new
 pfx = Trie.new
 
-parsed_pfx = { {strip: "", add: "", madd: "", freq: 0, pfreq: 0, str: ""} => true }.clear
-parsed_sfx = { {strip: "", add: "", madd: "", freq: 0, pfreq: 0, str: ""} => true }.clear
-mergeable_pfx = { {sizechange: 0, madd: ""} => { {strip: "", add: "", madd: "", freq: 0, pfreq: 0, str: ""} => true } }.clear
-mergeable_sfx = { {sizechange: 0, madd: ""} => { {strip: "", add: "", madd: "", freq: 0, pfreq: 0, str: ""} => true } }.clear
+parsed_pfx = { {strip: "", add: "", mstrip: "", madd: "", freq: 0, pfreq: 0, str: ""} => true }.clear
+parsed_sfx = { {strip: "", add: "", mstrip: "", madd: "", freq: 0, pfreq: 0, str: ""} => true }.clear
+mergeable_pfx = { {mstrip: "", madd: ""} => { {strip: "", add: "", mstrip: "", madd: "", freq: 0, pfreq: 0, str: ""} => true } }.clear
+mergeable_sfx = { {mstrip: "", madd: ""} => { {strip: "", add: "", mstrip: "", madd: "", freq: 0, pfreq: 0, str: ""} => true } }.clear
 
 input.each_line do |l|
   if l =~ /^PFX/
@@ -171,14 +177,14 @@ input.each_line do |l|
 end
 
 parsed_pfx.each_key do |entry|
-  mergeable_pfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}] ||= {entry => true}
-  mergeable_pfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}][entry] = true
+  mergeable_pfx[{mstrip: entry[:mstrip], madd: entry[:madd]}] ||= {entry => true}
+  mergeable_pfx[{mstrip: entry[:mstrip], madd: entry[:madd]}][entry] = true
   pfx.insert(entry)
 end
 
 parsed_sfx.each_key do |entry|
-  mergeable_sfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}] ||= {entry => true}
-  mergeable_sfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}][entry] = true
+  mergeable_sfx[{mstrip: entry[:mstrip], madd: entry[:madd]}] ||= {entry => true}
+  mergeable_sfx[{mstrip: entry[:mstrip], madd: entry[:madd]}][entry] = true
   sfx.insert(entry)
 end
 
@@ -188,46 +194,29 @@ sfx.dfs_sort
 puts "SET UTF-8"
 puts "WORDCHARS -’"
 
-flagspool_pfx.chars.each do |ch|
-  freq, data = pfx.dfs(false)
-  cherry_pick = {sizechange: 0, madd: ""}
+def gen(trie, flagspool, mergeable, cmd)
+flagspool.chars.each do |ch|
+  freq, data = trie.dfs(false)
+  cherry_pick = {mstrip: "", madd: ""}
   bestscore = 0
   data.each do |entry|
-    if mergeable_pfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}].size > 1
-      score = mergeable_pfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}].map {|entry, _| entry[:freq] }.sum
+    if mergeable[{mstrip: entry[:mstrip], madd: entry[:madd]}].size > 1
+      score = mergeable[{mstrip: entry[:mstrip], madd: entry[:madd]}].map {|entry, _| entry[:freq] }.sum
       if score > bestscore
-        cherry_pick = {sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}
+        cherry_pick = {mstrip: entry[:mstrip], madd: entry[:madd]}
         bestscore = score
       end
     end
   end
   if data.size > 0
-    freq, data = pfx.dfs(true, pfx.root, cherry_pick)
-    puts "\nPFX #{ch} Y #{data.size}"
+    freq, data = trie.dfs(true, trie.root, cherry_pick)
+    puts "\n#{cmd} #{ch} Y #{data.size}"
     data.sort {|a, b| a[:madd] == b[:madd] ? a[:strip] <=> b[:strip] : a[:madd] <=> b[:madd] }.each do |entry|
       puts entry[:str].sub(/\?/, ch)
     end
   end
+end
 end
 
-flagspool_sfx.chars.each do |ch|
-  freq, data = sfx.dfs(false)
-  cherry_pick = {sizechange: 0, madd: ""}
-  bestscore = 0
-  data.each do |entry|
-    if mergeable_sfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}].size > 1
-      score = mergeable_sfx[{sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}].map {|entry, _| entry[:freq] }.sum
-      if score > bestscore
-        cherry_pick = {sizechange: entry[:add].size - entry[:strip].size, madd: entry[:madd]}
-        bestscore = score
-      end
-    end
-  end
-  if data.size > 0
-    freq, data = sfx.dfs(true, sfx.root, cherry_pick)
-    puts "\nSFX #{ch} Y #{data.size}"
-    data.sort {|a, b| a[:madd] == b[:madd] ? a[:strip] <=> b[:strip] : a[:madd] <=> b[:madd] }.each do |entry|
-      puts entry[:str].sub(/\?/, ch)
-    end
-  end
-end
+gen(pfx, flagspool_pfx, mergeable_pfx, "PFX")
+gen(sfx, flagspool_sfx, mergeable_sfx, "SFX")
