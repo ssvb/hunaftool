@@ -7,7 +7,7 @@ MINADD_PFX      = 1
 MINSTRIP_SFX    = 1
 MINADD_SFX      = 1
 MINPF           = 100
-GROUP_MERGEABLE = true
+GROUP_MERGEABLE = false
 
 # 15 possible flags for prefixes
 flagspool_pfx = "0123456789+-*%="
