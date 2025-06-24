@@ -65,7 +65,11 @@ end
 # This yield all possible stripping/affix combinations for a common stem.
 def affcombs(stem, affixes)
   if affixes.size > MAX_STEM_AFFIXES
-    STDERR.puts "! The stem «#{stem}» has #{affixes.size} affixes and exceeds the allowed limit - SKIPPED."
+    if Cfg.prefix_mode?
+      STDERR.puts "! The stem «#{stem.reverse}» has #{affixes.size} prefixes and this exceeds the allowed limit - SKIPPED."
+    else
+      STDERR.puts "! The stem «#{stem}» has #{affixes.size} suffixes and this exceeds the allowed limit - SKIPPED."
+    end
     return
   end
 
