@@ -257,11 +257,15 @@ class Trie
   end
 
   def dfs(remove = true, node = @root, cherry_pick = { {mstrip: "", madd: ""} => true })
-    node.affixes.each_with_index do |entry, idx|
-      if cherry_pick.has_key?({mstrip: entry[:mstrip], madd: entry[:madd]})
-        node.affixes.delete_at(idx) if remove
-        return entry[:freq], [entry]
+    if node.affixes.size > 0
+      cherry_picked = [node.affixes.first].clear
+      node.affixes.reject! do |entry|
+        if cherry_pick.has_key?({mstrip: entry[:mstrip], madd: entry[:madd]})
+          cherry_picked.push(entry)
+          remove
+        end
       end
+      return cherry_picked.map {|entry| entry[:freq] }.sum, cherry_picked if cherry_picked.size > 0
     end
 
     total_child_freq = 0
