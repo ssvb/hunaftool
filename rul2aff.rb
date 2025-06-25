@@ -259,10 +259,10 @@ class Trie
   def dfs(remove = true, node = @root, cherry_pick = { {mstrip: "", madd: ""} => true })
     if node.affixes.size > 0
       cherry_picked = [node.affixes.first].clear
-      node.affixes.reject! do |entry|
+      node.affixes.each_with_index do |entry, idx|
         if cherry_pick.fetch({mstrip: entry[:mstrip], madd: entry[:madd]}, nil) == true
           cherry_picked.push(entry)
-          remove
+          node.affixes.delete_at(idx) if remove
           break
         end
       end
