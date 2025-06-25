@@ -166,7 +166,7 @@ jobs:
 
           cat words_pref_pruned.arul words_suff_pruned.arul > words_pruned.arul
 
-          ./rul2aff --minfreq-real=1 -g words_pruned.arul > words_pruned.aff
+          ./rul2aff --autoflags=20,70 --minfreq-real=1 -g words_pruned.arul > words_pruned.aff
 
       - name: Generate the pruned dictionary
         run: |
