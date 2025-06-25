@@ -160,7 +160,7 @@ jobs:
           ./hunaftool words_suff.aff words_suff.dic words_suff_pruned.arul
           ./hunaftool words_pref.aff words_pref.dic words_pref_pruned.arul
 
-          cat words_pref_pruned.arul words_suff_pruned.arul > words_pruned,arul
+          cat words_pref_pruned.arul words_suff_pruned.arul > words_pruned.arul
 
           ./rul2aff --minfreq-real=5 -g words_pruned.arul > words_pruned.aff
 
