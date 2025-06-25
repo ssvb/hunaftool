@@ -260,12 +260,20 @@ class Trie
     if node.affixes.size > 0
       cherry_picked = [node.affixes.first].clear
       node.affixes.reject! do |entry|
-        if cherry_pick.has_key?({mstrip: entry[:mstrip], madd: entry[:madd]})
+        if cherry_pick.fetch({mstrip: entry[:mstrip], madd: entry[:madd]}, nil) == true
           cherry_picked.push(entry)
           remove
         end
       end
+      abort "fgdsgsdgs\n" if cherry_picked.size > 1
+      # return the whitelisted entries
       return cherry_picked.map {|entry| entry[:freq] }.sum, cherry_picked if cherry_picked.size > 0
+    end
+
+    # skip the blacklisted entries
+    cur_idx = 0
+    while cur_idx < node.affixes.size && cherry_pick.fetch({mstrip: node.affixes[cur_idx][:mstrip], madd: node.affixes[cur_idx][:madd]}, nil) == false
+      cur_idx += 1
     end
 
     total_child_freq = 0
@@ -282,16 +290,17 @@ class Trie
       total_child_entr += child_entr
     end
 
-    if node.affixes.size > 0
-      if total_child_freq >= (node.affixes.first[:freq] || 0)
+    if cur_idx < node.affixes.size
+      if total_child_freq >= (node.affixes[cur_idx][:freq] || 0)
         children.each_value {|child| dfs(true, child, cherry_pick) } if remove
         return total_child_freq.to_i, total_child_entr
       else
         if remove
-          tmp = node.affixes.shift
+          tmp = node.affixes[cur_idx]
+          node.affixes.delete_at(cur_idx)
           return tmp[:freq], [tmp]
         else
-          return node.affixes.first[:freq], [node.affixes.first]
+          return node.affixes[cur_idx][:freq], [node.affixes[cur_idx]]
         end
       end
     end
@@ -347,10 +356,25 @@ def gen(trie, flagspool, mergeable, cmd)
 flagspool.chars.each do |ch|
   freq, data = trie.dfs(false)
   cherry_pick = { {mstrip: "", madd: ""} => true }.clear
+  comb_freq = { {mstrip: "", madd: ""} => 0 }.clear
   data.each do |entry|
     k = {mstrip: entry[:mstrip], madd: entry[:madd]}
-    cherry_pick[k] = true if mergeable[k].size > 1 && Cfg.group_mergeable?
+    comb_freq[k] = comb_freq.fetch(k, 0) + entry[:freq]
   end
+  tmp = comb_freq.to_a.sort {|a, b| b[1] <=> a[1] }
+  total_freq = tmp.map {|a| a[1]}.sum
+  cum_freq = 0
+  tmp.each do |a|
+    k = a[0]
+    if mergeable[k].size > 1 && Cfg.group_mergeable?
+      cherry_pick[k] = (cum_freq <= (total_freq >> 1))
+    end
+    cum_freq += a[1]
+  end
+#  data.each do |entry|
+#    k = {mstrip: entry[:mstrip], madd: entry[:madd]}
+#    cherry_pick[k] = true if mergeable[k].size > 1 && 
+#  end
   if data.size > 0
     freq, data = trie.dfs(true, trie.root, cherry_pick)
     puts "\n#{cmd} #{ch} Y #{data.size}"
