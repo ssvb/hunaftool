@@ -139,21 +139,30 @@ jobs:
           chmod +x hunaftool
           chmod +x rul2aff
           chmod +x flagsfreq
-          cat words_suff.arul words_pref.arul > words_all.arul
-          ./rul2aff words_all.arul > words_suff.aff
+          ./rul2aff -g --flagspool-pfx=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz words_pref.arul > words_pref.aff
+          ./rul2aff -g --flagspool-sfx=!$%&'()*+,-0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~ words_suff.arul > words_suff.aff
 
-      - name: Generate the initial dictionary
+      - name: Generate the initial dictionaries (separate for pref/suff)
         run: |
-          ./hunaftool -v words_suff.aff words.txt words.dic
-          ls -l words.dic
-          wc -l words.dic
-          cat words_suff.aff words.dic > merged.txt
+          ./hunaftool -v words_suff.aff words.txt words_suff.dic
+          ls -l words_suff.dic
+          wc -l words_suff.dic
+          cat words_suff.aff words_suff.dic > merged.txt
+          ls -l merged.txt
+          ./hunaftool -v words_pref.aff words.txt words_pref.dic
+          ls -l words_pref.dic
+          wc -l words_pref.dic
+          cat words_pref.aff words_pref.dic > merged.txt
           ls -l merged.txt
 
       - name: Distill a reduced .arul file
         run: |
-          ./hunaftool words_suff.aff words.dic words_pruned.arul
-          ./rul2aff words_pruned.arul > words_pruned.aff
+          ./hunaftool words_suff.aff words_suff.dic words_suff_pruned.arul
+          ./hunaftool words_pref.aff words_pref.dic words_pref_pruned.arul
+
+          cat words_pref_pruned.arul words_suff_pruned.arul > words_pruned,arul
+
+          ./rul2aff --minfreq-real=5 -g words_pruned.arul > words_pruned.aff
 
       - name: Generate the pruned dictionary
         run: |
