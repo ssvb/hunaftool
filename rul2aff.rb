@@ -90,22 +90,22 @@ args = ARGV.select do |arg|
   elsif arg =~ /^\-g$/
     Cfg.group_mergeable = true
     nil
-  elsif arg =~ /^\--minstrip-pfx=(\d+)$/
+  elsif arg =~ /^\-\-minstrip\-pfx=(\d+)$/
     Cfg.minstrip_pfx = $1.to_i
     nil
-  elsif arg =~ /^\--minadd-pfx=(\d+)$/
+  elsif arg =~ /^\-\-minadd\-pfx=(\d+)$/
     Cfg.minadd_pfx = $1.to_i
     nil
-  elsif arg =~ /^\--minstrip-sfx=(\d+)$/
+  elsif arg =~ /^\-\-minstrip\-sfx=(\d+)$/
     Cfg.minstrip_sfx = $1.to_i
     nil
-  elsif arg =~ /^\--minadd-sfx=(\d+)$/
+  elsif arg =~ /^\-\-minadd\-sfx=(\d+)$/
     Cfg.minadd_sfx = $1.to_i
     nil
-  elsif arg =~ /^\--minfreq-real=(\d+)$/
+  elsif arg =~ /^\-\-minfreq\-real=(\d+)$/
     Cfg.minfreq_real = $1.to_i
     nil
-  elsif arg =~ /^\--flagspool-pfx=(\S+)$/
+  elsif arg =~ /^\-\-flagspool\-pfx=(\S+)$/
     tmp = $1
     unless tmp.chars.sort.uniq.join.size == tmp.size
       STDERR.puts "! '#{tmp}' isn't a valid list of UTF-8 characters without duplicates."
@@ -113,13 +113,32 @@ args = ARGV.select do |arg|
     end
     Cfg.flagspool_pfx = tmp
     nil
-  elsif arg =~ /^\--flagspool-sfx=(\S+)$/
+  elsif arg =~ /^\-\-flagspool\-sfx=(\S+)$/
     tmp = $1
     unless tmp.chars.sort.uniq.join.size == tmp.size
       STDERR.puts "! '#{tmp}' isn't a valid list of UTF-8 characters without duplicates."
       exit 1
     end
     Cfg.flagspool_sfx = tmp
+    nil
+  elsif arg =~ /^\-\-autoflags=(\d+),(\d+)$/
+    num_pfx = $1.to_i
+    num_sfx = $2.to_i
+    # the list of non-problematic characters that encode into one byte in UTF-8 representation
+    goodflags = "!\"$%&'()*+,-0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+    goodsize = goodflags.size
+    if num_pfx + num_sfx > goodsize
+      abort "! The total number of autoassigned flags must not exceed #{goodsize}.\n"
+    end
+    if num_sfx <= 26 * 2 && num_pfx <= 14
+      # nicer looking flags
+      Cfg.flagspool_pfx = "0123456789+-*%"[0 ... num_pfx]
+      Cfg.flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"[0 ... num_sfx]
+    else
+      # only care about assigning a sufficient number of flags to get the job done
+      Cfg.flagspool_pfx = goodflags[0 ... num_pfx]
+      Cfg.flagspool_sfx = goodflags[num_pfx ... num_pfx + num_sfx]
+    end
     nil
   elsif arg =~ /^\-/
     abort "Unrecognized command line option: '#{arg}'\n"
