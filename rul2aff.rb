@@ -2,17 +2,140 @@
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
 
-MINSTRIP_PFX    = 0
-MINADD_PFX      = 1
-MINSTRIP_SFX    = 1
-MINADD_SFX      = 1
-MINPF           = 30
-GROUP_MERGEABLE = true
+###############################################################################
+# Parse command line options
+###############################################################################
 
-# 15 possible flags for prefixes
-flagspool_pfx = "0123456789+-*%="
-# 68 possible flags for suffixes
-flagspool_sfx = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzŠŽČŚŹĆŃŬšžčśźćńŭ"
+module Cfg
+  @@verbose = false
+
+  # Set the minimal desired size of the 'stripping' field of the prefix rule
+  # entries. This can be used to disallow zero stripping rules, which might
+  # be not very good for the speed of the process of dictionary generation.
+  @@minstrip_pfx = 0
+
+  # Set the minimal desired size of the 'affix' field of the prefix rule
+  # entries. This can be used to disallow zero affix rules, which might
+  # be not very good for the speed of the spellchecking by hunspell using
+  # the generated dictionary.
+  @@minadd_pfx   = 1
+
+  # Set the minimal desired size of the 'stripping' field of the suffix rule
+  # entries. This can be used to disallow zero stripping rules, which might
+  # be not very good for the speed of the process of dictionary generation.
+  @@minstrip_sfx = 1
+
+  # Set the minimal desired size of the 'affix' field of the suffix rule
+  # entries. This can be used to disallow zero affix rules, which might
+  # be not very good for the speed of the spellchecking by hunspell using
+  # the generated dictionary.
+  @@minadd_sfx   = 1
+
+  # Set the minimal theoretical frequency cutoff point for the data loaded
+  # from the raw .rul files. This can be used to optimize the resources usage
+  # during dictionary generation. For example, it obviously makes no sense
+  # to have a rule for samething that occurs only once in the dictionary,
+  # but the cutoff point can be set much higher than that. The frequency
+  # is theoretical (the rule can be used to construct that many words in
+  # the dictionary, but it's unlikely to be used that many times in
+  # practice due to the competition with other rules).
+  @@minfreq_theoretical = 2
+
+  # Set the minimal practical frequency cutoff point for the data loaded
+  # from the pre-filtered .rul files. This is based on the real measured
+  # frequency of the affix rules usage, based on the preliminary dictionary
+  # testing. Beware that the low value of the measured real frequency
+  # doesn't necessarily mean that the rule is completely useless, especially
+  # if it has a high theoretical frequency value. Some other competing
+  # rules might be just stealing the spotlight and this rule might still
+  # have its chance to shine in other circumstances.
+  @@minfreq_real        = 2
+
+  # The pool of the available affix flags for prefixes. Each of the flags can
+  # be a single UTF-8 character, but ASCII is preferred for compact storage.
+  @@flagspool_pfx       = "0123456789"
+
+  # The pool of the available affix flags for suffixes. Each of the flags can
+  # be a single UTF-8 character, but ASCII is preferred for compact storage.
+  @@flagspool_sfx       = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+  @@group_mergeable     = false
+
+  def self.verbose?            ; @@verbose end
+  def self.verbose=(v)         ; @@verbose = v end
+  def self.minstrip_pfx        ; @@minstrip_pfx end
+  def self.minstrip_pfx=(v)    ; @@minstrip_pfx = v end
+  def self.minadd_pfx          ; @@minadd_pfx end
+  def self.minadd_pfx=(v)      ; @@minadd_pfx = v end
+  def self.minstrip_sfx        ; @@minstrip_sfx end
+  def self.minstrip_sfx=(v)    ; @@minstrip_sfx = v end
+  def self.minadd_sfx          ; @@minadd_sfx end
+  def self.minadd_sfx=(v)      ; @@minadd_sfx = v end
+
+  def self.minfreq_real        ; @@minfreq_real end
+  def self.minfreq_real=(v)    ; @@minfreq_real = v end
+  def self.group_mergeable?    ; @@group_mergeable end
+  def self.group_mergeable=(v) ; @@group_mergeable = v end
+
+  def self.flagspool_pfx       ; @@flagspool_pfx end
+  def self.flagspool_pfx=(v)   ; @@flagspool_pfx = v end
+  def self.flagspool_sfx       ; @@flagspool_sfx end
+  def self.flagspool_sfx=(v)   ; @@flagspool_sfx = v end
+end
+
+args = ARGV.select do |arg|
+  if arg =~ /^\-v$/
+    Cfg.verbose = true
+    nil
+  elsif arg =~ /^\-g$/
+    Cfg.group_mergeable = true
+    nil
+  elsif arg =~ /^\--minstrip-pfx=(\d+)$/
+    Cfg.minstrip_pfx = $1.to_i
+    nil
+  elsif arg =~ /^\--minadd-pfx=(\d+)$/
+    Cfg.minadd_pfx = $1.to_i
+    nil
+  elsif arg =~ /^\--minstrip-sfx=(\d+)$/
+    Cfg.minstrip_sfx = $1.to_i
+    nil
+  elsif arg =~ /^\--minadd-sfx=(\d+)$/
+    Cfg.minadd_sfx = $1.to_i
+    nil
+  elsif arg =~ /^\--minfreq-real=(\d+)$/
+    Cfg.minfreq_real = $1.to_i
+    nil
+  elsif arg =~ /^\--flagspool-pfx=(\S+)$/
+    tmp = $1
+    unless tmp.chars.sort.uniq.join.size == tmp.size
+      STDERR.puts "! '#{tmp}' isn't a valid list of UTF-8 characters without duplicates."
+      exit 1
+    end
+    Cfg.flagspool_pfx = tmp
+    nil
+  elsif arg =~ /^\--flagspool-sfx=(\S+)$/
+    tmp = $1
+    unless tmp.chars.sort.uniq.join.size == tmp.size
+      STDERR.puts "! '#{tmp}' isn't a valid list of UTF-8 characters without duplicates."
+      exit 1
+    end
+    Cfg.flagspool_sfx = tmp
+    nil
+  elsif arg =~ /^\-/
+    abort "Unrecognized command line option: '#{arg}'\n"
+  else
+    arg
+  end
+end
+
+unless args.size >= 1
+  puts "rul2aff"
+  puts "Copyright © 2025 Siarhei Siamashka. License: CC-BY-SA or MIT."
+  puts
+  puts "Usage: rul2aff [options] <whatever.rul> > [output_file]"
+  puts
+  exit 0
+end
 
 class TrieNode
   def children     ; @children end
@@ -42,10 +165,10 @@ class Trie
     add   = $3
     strip = "" if strip == "0"
     add = "" if add == "0"
-    return if type == "SFX" && strip.size < MINSTRIP_SFX
-    return if type == "SFX" && add.size < MINADD_SFX
-    return if type == "PFX" && strip.size < MINSTRIP_PFX
-    return if type == "PFX" && add.size < MINADD_PFX
+    return if type == "SFX" && strip.size < Cfg.minstrip_sfx
+    return if type == "SFX" && add.size < Cfg.minadd_sfx
+    return if type == "PFX" && strip.size < Cfg.minstrip_pfx
+    return if type == "PFX" && add.size < Cfg.minadd_pfx
 
     tmp1 = strip.chars
     tmp1 = tmp1.reverse if type == "SFX"
@@ -88,7 +211,7 @@ class Trie
               STDERR.puts "! #{add}/#{strip} #{@pfstat[add + "/" + strip]} vs. #{strip}/#{add} #{@pfstat[strip + "/" + add]}"
             end
           end
-          return if pfreq < MINPF
+          return if pfreq < Cfg.minfreq_real
         else
           STDERR.puts "! Unrecognized variable «#{varname}» in «#{str}»"
         end
@@ -155,7 +278,7 @@ class Trie
   end
 end
 
-input = File.open(ARGV[0])
+input = File.open(args[0])
 
 sfx = Trie.new
 pfx = Trie.new
@@ -193,7 +316,9 @@ pfx.dfs_sort
 sfx.dfs_sort
 
 puts "SET UTF-8"
-puts "WORDCHARS -’"
+puts "FLAG UTF-8"
+puts "FULLSTRIP"
+puts "WORDCHARS 0123456789-’"
 
 def gen(trie, flagspool, mergeable, cmd)
 flagspool.chars.each do |ch|
@@ -201,7 +326,7 @@ flagspool.chars.each do |ch|
   cherry_pick = { {mstrip: "", madd: ""} => true }.clear
   data.each do |entry|
     k = {mstrip: entry[:mstrip], madd: entry[:madd]}
-    cherry_pick[k] = true if mergeable[k].size > 1 && GROUP_MERGEABLE
+    cherry_pick[k] = true if mergeable[k].size > 1 && Cfg.group_mergeable?
   end
   if data.size > 0
     freq, data = trie.dfs(true, trie.root, cherry_pick)
@@ -213,5 +338,5 @@ flagspool.chars.each do |ch|
 end
 end
 
-gen(pfx, flagspool_pfx, mergeable_pfx, "PFX")
-gen(sfx, flagspool_sfx, mergeable_sfx, "SFX")
+gen(pfx, Cfg.flagspool_pfx, mergeable_pfx, "PFX")
+gen(sfx, Cfg.flagspool_sfx, mergeable_sfx, "SFX")
