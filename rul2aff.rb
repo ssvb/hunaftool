@@ -263,6 +263,7 @@ class Trie
         if cherry_pick.fetch({mstrip: entry[:mstrip], madd: entry[:madd]}, nil) == true
           cherry_picked.push(entry)
           remove
+          break
         end
       end
       abort "fgdsgsdgs\n" if cherry_picked.size > 1
