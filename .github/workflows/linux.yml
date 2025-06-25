@@ -140,7 +140,7 @@ jobs:
           chmod +x rul2aff
           chmod +x flagsfreq
           ./rul2aff -g --flagspool-pfx=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz words_pref.arul > words_pref.aff
-          ./rul2aff -g --flagspool-sfx=!$%&'()*+,-0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~ words_suff.arul > words_suff.aff
+          ./rul2aff -g --flagspool-sfx=!$%&()*+,-0123456789:;<=>@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{|}~ words_suff.arul > words_suff.aff
 
       - name: Generate the initial dictionaries (separate for pref/suff)
         run: |
