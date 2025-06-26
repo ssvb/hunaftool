@@ -139,8 +139,8 @@ jobs:
           chmod +x hunaftool
           chmod +x rul2aff
           chmod +x flagsfreq
-          ./rul2aff --autoflags=90,0 words_pref.arul > words_pref.aff
-          ./rul2aff --autoflags=0,90 words_suff.arul > words_suff.aff
+          ./rul2aff --minstrip-sfx=0 --autoflags=90,0 words_pref.arul > words_pref.aff
+          ./rul2aff --minstrip-sfx=0 --autoflags=0,90 words_suff.arul > words_suff.aff
 
       - name: Generate the initial dictionaries (separate for pref/suff)
         run: |
@@ -166,7 +166,7 @@ jobs:
 
           cat words_pref_pruned.arul words_suff_pruned.arul > words_pruned.arul
 
-          ./rul2aff --autoflags=20,70 --minfreq-real=1 -g words_pruned.arul > words_pruned.aff
+          ./rul2aff --minstrip-sfx=0 --autoflags=20,70 --minfreq-real=1 -g words_pruned.arul > words_pruned.aff
 
       - name: Generate the pruned dictionary
         run: |
