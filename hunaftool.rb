@@ -70,6 +70,17 @@ if (k5324534 = Kernel).responds_to? :eval ; k5324534.eval "class Object alias
 responds_to? respond_to? end ; module Kernel undef method_missing end" end
 def eval_if_run_by_ruby(src) if (k = Kernel).responds_to? :eval ; k.eval src end end
 
+# https://bugs.ruby-lang.org/issues/13551#note-3
+eval_if_run_by_ruby "
+module Kernel
+  def alias_singleton_method new_name, old_name
+    singleton_class.class_exec { alias_method new_name, old_name }
+  end
+end"
+
+# provide "File.exists?" for Ruby
+eval_if_run_by_ruby "class File alias_singleton_method :exists?, :exist? end"
+
 ###############################################################################
 
 module Cfg
@@ -1508,7 +1519,7 @@ args = ARGV.select do |arg|
   end
 end
 
-unless args.size >= 1 && args[0] =~ /\.aff$/i
+unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
   puts "hunaftool v#{VERSION} - automated conversion between plain text word lists"
   puts "                 and .DIC files for Hunspell, tailoring them for some"
   puts "                 already existing .AFF file with affixes."
