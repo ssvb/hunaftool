@@ -59,6 +59,27 @@ I128_0 = 0.to_i128
 # This is a Ruby-compatible trick to create a Crystal's lightweight tuple
 def tuple2(a, b) return a, b end
 
+# This icky blob of code aliases the Ruby's "respond_to?" method to "responds_to?",
+# making it easier to maintain the source level compatibility with Crystal. And
+# also provides access to the "eval_if_run_by_ruby" function, which does "eval"
+# when the code is run by Ruby, but does nothing when the code is compiled by
+# Crystal. It can be used to define additional aliases necessary for Ruby/Crystal
+# compatibility.
+module Kernel def method_missing(name, *args) true end end
+if (k5324534 = Kernel).responds_to? :eval ; k5324534.eval "class Object alias
+responds_to? respond_to? end ; module Kernel undef method_missing end" end
+def eval_if_run_by_ruby(src) if (k = Kernel).responds_to? :eval ; k.eval src end end
+# See https://bugs.ruby-lang.org/issues/13551#note-3
+eval_if_run_by_ruby "module Kernel def alias_singleton_method(new_name, old_name)
+singleton_class.class_exec { alias_method new_name, old_name } end end"
+# A convenient wrapper
+def ruby_class_method_alias(classname, from, to) eval_if_run_by_ruby "class
+#{classname} alias_singleton_method :#{to}, :#{from} end" end
+
+# Emulate "File.exists?" for Ruby 3.2.0 and newer, see
+# https://www.reddit.com/r/ruby/comments/1196wti/psa_and_a_little_rant_fileexists_direxists
+ruby_class_method_alias("File", "exist?", "exists?")
+
 ###############################################################################
 
 module Cfg
@@ -1513,7 +1534,7 @@ args = ARGV.select do |arg|
   end
 end
 
-unless args.size >= 1 && args[0] =~ /\.aff$/i
+unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
   puts "hunaftool v#{VERSION} - automated conversion between plain text word lists"
   puts "                 and .DIC files for Hunspell, tailoring them for some"
   puts "                 already existing .AFF file with affixes."
