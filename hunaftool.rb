@@ -76,6 +76,10 @@ singleton_class.class_exec { alias_method new_name, old_name } end end"
 def ruby_class_method_alias(classname, from, to) eval_if_run_by_ruby "class
 #{classname} alias_singleton_method :#{to}, :#{from} end" end
 
+# Emulate "File.exists?" for Ruby 3.2.0 and newer, see
+# https://www.reddit.com/r/ruby/comments/1196wti/psa_and_a_little_rant_fileexists_direxists
+ruby_class_method_alias("File", "exist?", "exists?")
+
 ###############################################################################
 
 module Cfg
@@ -1514,7 +1518,7 @@ args = ARGV.select do |arg|
   end
 end
 
-unless args.size >= 1 && args[0] =~ /\.aff$/i
+unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
   puts "hunaftool v#{VERSION} - automated conversion between plain text word lists"
   puts "                 and .DIC files for Hunspell, tailoring them for some"
   puts "                 already existing .AFF file with affixes."
