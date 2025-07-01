@@ -59,6 +59,17 @@ I128_0 = 0.to_i128
 # This is a Ruby-compatible trick to create a Crystal's lightweight tuple
 def tuple2(a, b) return a, b end
 
+# This icky blob of code aliases the Ruby's "respond_to?" method to "responds_to?",
+# making it easier to maintain the source level compatibility with Crystal. And
+# also provides access to the "eval_if_run_by_ruby" function, which does "eval"
+# when the code is run by Ruby, but does nothing when the code is compiled by
+# Crystal. It can be used to define additional aliases necessary for Ruby/Crystal
+# compatibility.
+module Kernel def method_missing(name, *args) true end end
+if (k5324534 = Kernel).responds_to? :eval ; k5324534.eval "class Object alias
+responds_to? respond_to? end ; module Kernel undef method_missing end" end
+def eval_if_run_by_ruby(src) if (k = Kernel).responds_to? :eval ; k.eval src end end
+
 ###############################################################################
 
 module Cfg
