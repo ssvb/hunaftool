@@ -70,16 +70,16 @@ if (k5324534 = Kernel).responds_to? :eval ; k5324534.eval "class Object alias
 responds_to? respond_to? end ; module Kernel undef method_missing end" end
 def eval_if_run_by_ruby(src) if (k = Kernel).responds_to? :eval ; k.eval src end end
 
-# https://bugs.ruby-lang.org/issues/13551#note-3
-eval_if_run_by_ruby "
-module Kernel
-  def alias_singleton_method new_name, old_name
-    singleton_class.class_exec { alias_method new_name, old_name }
-  end
-end"
+# Code snippet from https://bugs.ruby-lang.org/issues/13551#note-3
+eval_if_run_by_ruby "module Kernel def alias_singleton_method(new_name, old_name)
+singleton_class.class_exec { alias_method new_name, old_name } end end"
+
+def alias_ruby_class_method(classname, from, to)
+  eval_if_run_by_ruby "class #{classname} alias_singleton_method :#{to}, :#{from} end"
+end
 
 # provide "File.exists?" for Ruby
-eval_if_run_by_ruby "class File alias_singleton_method :exists?, :exist? end"
+alias_ruby_class_method("File", "exist?", "exists?")
 
 ###############################################################################
 
