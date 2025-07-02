@@ -1,6 +1,22 @@
-#!/usr/bin/env crystal
+#!/usr/bin/env ruby
 # Copyright © 2025 Siarhei Siamashka
 # SPDX-License-Identifier: CC-BY-SA-3.0+ OR MIT
+
+# This is how runing under Crystal can be detected.
+COMPILED_BY_CRYSTAL = (((1 / 2) * 2) != 0)
+
+# This is a Ruby-compatible trick to create a Crystal's lightweight tuple
+def tuple2(a, b) return a, b end
+
+# This icky blob of code aliases the Ruby's "respond_to?" method to "responds_to?",
+# making it easier to maintain the source level compatibility with Crystal. And
+# also provides access to the "eval_if_run_by_ruby" function, which does "eval"
+# when the code is run by Ruby, but does nothing when the code is compiled by
+# Crystal. It can be used to define additional aliases necessary for Ruby/Crystal
+# compatibility.
+module Kernel def method_missing(name, *args) true end end
+if (k5324534 = Kernel).responds_to? :eval ; k5324534.eval "class Object alias
+responds_to? respond_to? end ; module Kernel undef method_missing end" end
 
 DESIRED_MIN_STRIP_SIZE = 3
 # allow to have a condition field up to this size for zero affixes
@@ -33,14 +49,14 @@ end
 
 # Yield all possible ways of splitting the word into stem/affix pairs
 def affix_variants(word)
-  0.upto(word.size) do |affsize|
+  1.upto(word.size - 1) do |affsize|
     yield "#{word[0, word.size - affsize]}/#{word[word.size - affsize, affsize]}"
   end
 end
 
 def common_prefix_len(word1, word2)
   ans = 0
-  0.upto({word1.size, word2.size}.min - 1) do |i|
+  0.upto(tuple2(word1.size, word2.size).min - 1) do |i|
     return ans if word1[i] != word2[i]
     ans += 1
   end
@@ -51,14 +67,22 @@ end
 # gigantic multi-terabyte sets of data via zstd-compressed temporary files.
 # None of this gigantic data needs to be lifted into RAM, freeing it for the
 # other tasks.
+class IO::FileDescriptor def close_write ; close end end
+
 def pipe_through_coreutils_sort(sortargs = ["--field-separator=/", "--key=1,1", "--key=2", "--compress-program=zstd"])
-  Process.run("sort", args: sortargs, env: {"LC_ALL" => "C"}, input: :pipe, output: :pipe) do |proc|
-    # Adjust pipe configuration knobs to minimize flushing overhead and maximize performance
-    proc.input.sync             = false
-    proc.input.flush_on_newline = false
-    proc.output.read_buffering  = true
-    # Yield the prepared input and output pipes
-    yield proc.input, proc.output
+  if COMPILED_BY_CRYSTAL
+    Process.run("sort", args: sortargs, env: {"LC_ALL" => "C"}, input: :pipe, output: :pipe) do |proc|
+      # Adjust pipe configuration knobs to minimize flushing overhead and maximize performance
+      proc.input.sync             = false
+      proc.input.flush_on_newline = false
+      proc.output.read_buffering  = true
+      # Yield the prepared input and output pipes
+      yield proc.input, proc.output
+    end
+  elsif (io = IO).responds_to?(:popen)
+    io.popen({"LC_ALL" => "C"}, ["sort"] + sortargs, "r+") {|pipe| yield pipe, pipe }
+  else
+    raise "shouldn't reach here\n"
   end
 end
 
@@ -97,7 +121,7 @@ def affixpairs(args)
         sort_input.puts sepaffix
       end
     end
-    sort_input.close
+    sort_input.close_write
 
     stem = ""
     affixes = [['a']].clear
@@ -119,7 +143,7 @@ def combine_counters(args)
     affixpairs(args) do |affcomb|
       sort_input.puts affcomb
     end
-    sort_input.close
+    sort_input.close_write
 
     p1 = ""
     p2 = ""
@@ -139,13 +163,16 @@ def combine_counters(args)
   end
 end
 
-STDOUT.flush_on_newline = false
-STDOUT.sync = false
+if COMPILED_BY_CRYSTAL
+  STDOUT.flush_on_newline = false
+  STDOUT.sync = false
+end
+
 pipe_through_coreutils_sort(["--field-separator=/",
                              "--key=3,3nr", "--key=1,2",
                              "--compress-program=zstd"]) do |sort_input, sort_output|
   combine_counters(args) {|line| sort_input.puts line }
-  sort_input.close
+  sort_input.close_write
 
   rules_cnt = 0
   out_data = [[""]].clear
