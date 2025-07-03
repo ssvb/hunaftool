@@ -17,6 +17,13 @@ def tuple2(a, b) return a, b end
 module Kernel def method_missing(name, *args) true end end
 if (k5324534 = Kernel).responds_to? :eval ; k5324534.eval "class Object alias
 responds_to? respond_to? end ; module Kernel undef method_missing end" end
+def eval_if_run_by_ruby(src) if (k = Kernel).responds_to? :eval ; k.eval src end end
+
+# Change the String's "split" method in Ruby not to omit trailing empty fields
+# by default in order to make its default behaviour the same as in Crystal.
+eval_if_run_by_ruby "class String alias split_orig42351 split
+def split(pattern = nil, limit = -1) block_given? ? split_orig42351(
+pattern, limit) {|x| yield x } : split_orig42351(pattern, limit) end end"
 
 DESIRED_MIN_STRIP_SIZE = 3
 # allow to have a condition field up to this size for zero affixes
@@ -49,7 +56,7 @@ end
 
 # Yield all possible ways of splitting the word into stem/affix pairs
 def affix_variants(word)
-  1.upto(word.size - 1) do |affsize|
+  0.upto(word.size) do |affsize|
     yield "#{word[0, word.size - affsize]}/#{word[word.size - affsize, affsize]}"
   end
 end
