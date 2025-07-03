@@ -67,7 +67,18 @@ end
 # gigantic multi-terabyte sets of data via zstd-compressed temporary files.
 # None of this gigantic data needs to be lifted into RAM, freeing it for the
 # other tasks.
-class IO::FileDescriptor def close_write ; close end end
+
+class EmulatedIoPopenPipe
+  @pipe_input, @pipe_output = STDOUT, STDIN
+  def initialize(pipe_input, pipe_output)
+    @pipe_input, @pipe_output = pipe_input, pipe_output
+  end
+  def close_write ; @pipe_input.close   end
+  def close       ; @pipe_output.close  end
+  def puts(s)     ; @pipe_input.puts(s) end
+  def gets        ; @pipe_output.gets   end
+  def each_line   ; @pipe_output.each_line {|line| yield line } end
+end
 
 def pipe_through_coreutils_sort(sortargs = ["--field-separator=/", "--key=1,1", "--key=2", "--compress-program=zstd"])
   if COMPILED_BY_CRYSTAL
@@ -77,12 +88,15 @@ def pipe_through_coreutils_sort(sortargs = ["--field-separator=/", "--key=1,1", 
       proc.input.flush_on_newline = false
       proc.output.read_buffering  = true
       # Yield the prepared input and output pipes
-      yield proc.input, proc.output
+      yield EmulatedIoPopenPipe.new(proc.input, proc.output)
     end
   elsif (io = IO).responds_to?(:popen)
-    io.popen({"LC_ALL" => "C"}, ["sort"] + sortargs, "r+") {|pipe| yield pipe, pipe }
+    io.popen({"LC_ALL" => "C"}, ["sort"] + sortargs, "r+") do |pipe|
+      pipe.sync = false
+      yield pipe
+    end
   else
-    raise "shouldn't reach here\n"
+    raise "should be unreachable\n"
   end
 end
 
@@ -111,21 +125,21 @@ def affcombs(stem, affixes)
 end
 
 def affixpairs(args)
-  pipe_through_coreutils_sort do |sort_input, sort_output|
+  pipe_through_coreutils_sort do |pipe|
     File.open(args[0]).each_line do |l|
       l = l.strip
       if Cfg.prefix_mode?
         l = l.reverse
       end
       affix_variants(l) do |sepaffix|
-        sort_input.puts sepaffix
+        pipe.puts sepaffix
       end
     end
-    sort_input.close_write
+    pipe.close_write
 
     stem = ""
     affixes = [['a']].clear
-    sort_output.each_line do |l|
+    pipe.each_line do |l|
       a = l.strip.split('/')
       if a[0] != stem
         affcombs(stem, affixes) {|affcomb| yield affcomb }
@@ -139,16 +153,16 @@ def affixpairs(args)
 end
 
 def combine_counters(args)
-  pipe_through_coreutils_sort do |sort_input, sort_output|
+  pipe_through_coreutils_sort do |pipe|
     affixpairs(args) do |affcomb|
-      sort_input.puts affcomb
+      pipe.puts affcomb
     end
-    sort_input.close_write
+    pipe.close_write
 
     p1 = ""
     p2 = ""
     cnt = 0
-    sort_output.each_line do |l|
+    pipe.each_line do |l|
       a = l.strip.split('/')
       if a[0] == p1 && a[1] == p2
         cnt += a[2].to_i
@@ -163,21 +177,19 @@ def combine_counters(args)
   end
 end
 
-if COMPILED_BY_CRYSTAL
-  STDOUT.flush_on_newline = false
-  STDOUT.sync = false
-end
+STDOUT.flush_on_newline = false if COMPILED_BY_CRYSTAL
+STDOUT.sync = false
 
 pipe_through_coreutils_sort(["--field-separator=/",
                              "--key=3,3nr", "--key=1,2",
-                             "--compress-program=zstd"]) do |sort_input, sort_output|
-  combine_counters(args) {|line| sort_input.puts line }
-  sort_input.close_write
+                             "--compress-program=zstd"]) do |pipe|
+  combine_counters(args) {|line| pipe.puts line }
+  pipe.close_write
 
   rules_cnt = 0
   out_data = [[""]].clear
   out_col_width = [0, 0, 0]
-  sort_output.each_line do |l|
+  pipe.each_line do |l|
     a = l.strip.split('/')
     if Cfg.prefix_mode?
       a[0] = a[0].reverse
@@ -189,8 +201,10 @@ pipe_through_coreutils_sort(["--field-separator=/",
       break if (rules_cnt += 1) >= RULES_LIMIT
     end
   end
-  sort_output.close
+  pipe.close
   out_data.each do |row|
     printf("#%s  %#{out_col_width[0]}s %-#{out_col_width[1]}s  %s\n", (Cfg.prefix_mode? ? "prefix" : "suffix"), row[0], row[1], row[2])
   end
 end
+
+STDOUT.flush
