@@ -551,6 +551,9 @@ end
 # the "TRY" directive in the .AFF file.
 
 class AFF
+  # The AF directive is used for remapping numeric identifiers to affix flags
+  @@id_to_flagfield = {0 => ""}.clear
+
   def initialize(aff_file, charlist = "", opt = RULESET_FROM_STEM)
     @affdata = (((opt & RULESET_TESTSTRING) != 0) ? aff_file
                                                   : File.read(aff_file))
@@ -597,7 +600,8 @@ class AFF
     @forbiddenword_flag = AffFlags.need_hash? ? {0 => true}.clear : I128_0
     @forbiddenword_flag = forbiddenword_flag_s.to_aff_flags
     flag = ""
-    cnt = 0
+    cnt = 0                  # the SFX/PFX directives counter
+    af_cnt, af_cur_id = 0, 0 # counters for the AF directive parsing
     crossproduct = false
     @affdata.each_line do |l|
       if l =~ /^\s*TRY\s+(\S+)(.*)$/
@@ -612,6 +616,10 @@ class AFF
           next
         end
         @fullstrip = true
+      elsif af_cnt == 0 && l =~ /^\s*AF\s+(\d+)/
+        af_cnt = $1.to_i
+      elsif af_cnt > 0 && l =~ /^\s*AF\s+(\S+)/
+        @@id_to_flagfield[(af_cur_id += 1)] = $1
       elsif cnt == 0 && l =~ /^\s*([SP])FX\s+(\S+)\s+(\S+)\s+(\d+)(\s|$)/
         type = $1
         flag = $2
@@ -865,7 +873,16 @@ class AFF
   def decode_dic_entry(line)
     stem = ""
     if line =~ /^([^\/]+)\/?(\S*)/
-      expand_stem($1.strip.to_8bit, $2.to_aff_flags) do |wordform, pfx_flag, sfx_flag, forbidden|
+      word, flagfield = $1, $2
+      if !@@id_to_flagfield.empty? && flagfield =~ /^(\d+)$/
+        id = $1.to_i
+        unless @@id_to_flagfield.has_key?(id)
+          STDERR.puts "! Incorrect AF index «#{id}»."
+          return stem
+        end
+        flagfield = @@id_to_flagfield[id]
+      end
+      expand_stem(word.strip.to_8bit, flagfield.to_aff_flags) do |wordform, pfx_flag, sfx_flag, forbidden|
         wordform_utf8 = wordform.to_utf8
         stem = wordform_utf8 if !pfx_flag && !sfx_flag
         yield wordform_utf8, forbidden
