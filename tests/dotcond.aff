@@ -1,0 +1,10 @@
+SET UTF-8
+TRY abz
+WORDCHARS .
+NEEDAFFIX !
+
+# Append "a" if the word is at least 3 character long
+# Append "b" if the word is at least 3 character long and the second last character is "."
+SFX X Y 2
+SFX X 0 a ...
+SFX X 0 b .[.].

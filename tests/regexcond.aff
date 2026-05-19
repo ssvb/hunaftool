@@ -1,0 +1,7 @@
+SET UTF-8
+TRY test
+WORDCHARS ()[]
+
+# Replace round brackets with square brackets
+SFX X Y 1
+SFX X () [] ()

@@ -79,6 +79,8 @@ def ruby_class_method_alias(classname, from, to) eval_if_run_by_ruby "class
 # Emulate "File.exists?" for Ruby 3.2.0 and newer, see
 # https://www.reddit.com/r/ruby/comments/1196wti/psa_and_a_little_rant_fileexists_direxists
 ruby_class_method_alias("File", "exist?", "exists?")
+# Emulate the availability of Crystal's Regex for Ruby (the name is slightly off)
+eval_if_run_by_ruby "Regex = Regexp"
 
 ###############################################################################
 
@@ -406,21 +408,44 @@ end
 
 ###############################################################################
 
+# Convert from Hunspell's condition field match pattern to an array, where
+# each element is an array of possible character indexes in that position
 def parse_condition(condition)
   out = ["".bytes].clear
-  condition.scan(/\[\^([^\]]*)\]|\[([^\]\^]*)\]|(.)/) do
-    m1, m2, m3 = $~.captures
+  condition.scan(/\[\^([^\]]*)\]|\[([^\]\^]*)\]|(\.)|(.)/) do
+    m1, m2, m3, m4 = $~.captures
     out << if m1
       tmp = {0 => true}.clear
       m1.to_8bit.each {|idx| tmp[idx] = true }
       Alphabet.finalized_size.times.map {|x| U8_0 + x }.select {|idx| !tmp.has_key?(idx) }.to_a
     elsif m2
       m2.to_8bit.sort.uniq
+    elsif m3
+      Alphabet.finalized_size.times.map {|x| U8_0 + x }.to_a
     else
-      m3.to_s.to_8bit
+      m4.to_s.to_8bit
     end
   end
   out
+end
+
+# Convert from Hunspell's condition field match pattern to Ruby regex that
+# can be safely applied to strings
+def condition_to_ruby_regex(condition)
+  out = [""]
+  condition.scan(/\[\^([^\]]*)\]|\[([^\]\^]*)\]|(\.)|(.)/) do
+    m1, m2, m3, m4 = $~.captures
+    out << if m1
+      "[^" + Regex.escape(m1) + "]"
+    elsif m2
+      "[" + Regex.escape(m2) + "]"
+    elsif m3
+      "."
+    else
+      Regex.escape(m4.to_s)
+    end
+  end
+  out.join
 end
 
 # That's an affix rule, pretty much in the same format as in .AFF files
@@ -650,33 +675,32 @@ class AFF
         end
 
         # Check the condition field for sanity.
-        # FIXME: it would be nice to escape regular expressions here
-        unless (type == "S" && condition =~ /#{stripping}$/) ||
-               (type == "P" && condition =~ /^#{stripping}/)
+        unless (type == "S" && condition =~ /#{Regex.escape(stripping)}$/) ||
+               (type == "P" && condition =~ /^#{Regex.escape(stripping)}/)
           STDERR.puts "! Suspicious rule (strange condition field): #{l}"
           begin
-          if (type == "S" && stripping =~ /#{condition}$/) ||
-             (type == "P" && stripping =~ /^#{condition}/)
+          if (type == "S" && stripping =~ /#{condition_to_ruby_regex(condition)}$/) ||
+             (type == "P" && stripping =~ /^#{condition_to_ruby_regex(condition)}/)
             STDERR.puts "! ... the condition is effectively the same as the stripping field."
             condition = stripping
           elsif type == "S" && condition =~ /(.*)((\[[^\]\)\(\[]+\]|[^\[\]]){#{stripping.size}})$/
             condition_p1 = $1
             condition_p2 = $2
-            if stripping =~ /#{condition_p2}$/
+            if stripping =~ /#{condition_to_ruby_regex(condition_p2)}$/
               STDERR.puts "! ... the condition is equivalent to «#{condition_p1}#{stripping}»."
               condition = condition_p1 + stripping
             else
-              STDERR.puts "! ... the condition is inactive."
+              STDERR.puts "! ... the condition can't be ever satisfied."
               next
             end
           elsif type == "P" && condition =~ /^((\[[^\]\)\(\[]+\]|.){#{stripping.size}})(.*)/
             condition_p1 = $1
             condition_p2 = $3
-            if stripping =~ /^#{condition_p1}/
+            if stripping =~ /^#{condition_to_ruby_regex(condition_p1)}/
               STDERR.puts "! ... the condition is equivalent to «#{stripping}#{condition_p2}»."
               condition = stripping + condition_p2
             else
-              STDERR.puts "! ... the condition is inactive."
+              STDERR.puts "! ... the condition can't be ever satisfied."
               next
             end
           else raise "" end
@@ -686,8 +710,8 @@ class AFF
           end
         end
 
-        condition = (type == "S") ? condition.gsub(/#{stripping}$/, "") :
-                                    condition.gsub(/^#{stripping}/, "")
+        condition = (type == "S") ? condition.gsub(/#{Regex.escape(stripping)}$/, "") :
+                                    condition.gsub(/^#{Regex.escape(stripping)}/, "")
         flag2 = (affix =~ /\/(\S+)$/) ? $1 : ""
         affix = affix.gsub(/\/\S+$/, "")
         affix = "" if affix == "0"
