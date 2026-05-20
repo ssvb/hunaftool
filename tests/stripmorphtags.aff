@@ -1,0 +1,11 @@
+SET UTF-8
+TRY persbanxfolqXSyz
+WORDCHARS /
+SFX X Y 1
+SFX X 0 x .
+SFX Y Y 1
+SFX Y 0 y .
+SFX Z Y 1
+SFX Z 0 z .
+SFX / Y 1
+SFX / 0 S .

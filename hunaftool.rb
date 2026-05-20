@@ -896,8 +896,14 @@ class AFF
 
   def decode_dic_entry(line)
     stem = ""
-    if line =~ /^([^\/]+)\/?(\S*)/
-      word, flagfield = $1, $2
+    # Strip the morphological tags, see
+    #   https://github.com/hunspell/hunspell/blob/v1.7.3/src/hunspell/hashmgr.cxx#L654-L674
+    line = $1 if line =~ /^(.*?)((\t)|([\t ]+..\:))/
+    # The initial '/' is a part of the word, the '\/' is an escaped '/', see
+    #   https://github.com/hunspell/hunspell/blob/v1.7.3/src/hunspell/hashmgr.cxx#L682-L695
+    if line =~ /^(\/).(\S*)/ || line =~ /^(.*?[^\\])\/(\S*)/ || line =~ /^(.*)(\S*)/
+      flagfield = $2
+      word = $1.gsub(/\\\//, "/")
       if !@@id_to_flagfield.empty? && flagfield =~ /^(\d+)$/
         id = $1.to_i
         unless @@id_to_flagfield.has_key?(id)
