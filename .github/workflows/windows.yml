@@ -22,10 +22,9 @@ jobs:
       - shell: msys2 {0}
         run: |
           crystal --version
-          crystal build --release --static hunaftool.rb -o hunaftool.exe
+          rake
           ./hunaftool.exe
-          ruby tests/run-hunaftool-tests.rb ./hunaftool.exe tests
-          ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
+          rake check
 
       - uses: actions/upload-artifact@v4
         with:

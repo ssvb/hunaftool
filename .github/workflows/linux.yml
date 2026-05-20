@@ -19,10 +19,9 @@ jobs:
       - name: Run tests
         run: |
           crystal --version
-          crystal build --release --static hunaftool.rb
+          rake
           ./hunaftool
-          ruby tests/run-hunaftool-tests.rb ./hunaftool tests
-          ruby tests/run-hunaftool-tests.rb "ruby hunaftool.rb" tests
+          rake check
 
       - name: Run tests with the old Crystal 1.6.0 from Debian "bookworm"
         run: |
