@@ -58,6 +58,7 @@ I128_0 = 0.to_i128
 
 # This is a Ruby-compatible trick to create a Crystal's lightweight tuple
 def tuple2(a, b) return a, b end
+def tuple3(a, b, c) return a, b, c end
 
 # This icky blob of code aliases the Ruby's "respond_to?" method to "responds_to?",
 # making it easier to maintain the source level compatibility with Crystal. And
@@ -1215,9 +1216,7 @@ def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
 
   # Greedy selection, starting from those flags that cover more wordforms. Ties
   # are resolved by alphabetic sorting of the affix flag names.
-  flag_covers_sorted = flag_covers.to_a.sort do |a, b|
-    b[1].size == a[1].size ? flag_names[a[0]] <=> flag_names[b[0]] : b[1].size <=> a[1].size
-  end
+  flag_covers_sorted = flag_covers.to_a.sort_by {|x| tuple2(-x[1].size, flag_names[x[0]]) }
   result_flags = (have_needaffix ? aff.virtual_stem_flag.dup : empty_flags.dup)
   already_covered = [stem].to_set.clear
   flag_covers_sorted.each do |flag, wordforms|
@@ -1424,17 +1423,9 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
 
   order = idx_to_data.size.times.to_a
   subtask "Sort stem candidates by the number of their wordforms" do
-    order.sort! do |idx1, idx2|
-      if idx_to_data[idx2].covers.size == idx_to_data[idx1].covers.size
-        if idx_to_data[idx1].encword.size == idx_to_data[idx2].encword.size
-          idx_to_data[idx1].encword <=> idx_to_data[idx2].encword
-        else
-          idx_to_data[idx1].encword.size <=> idx_to_data[idx2].encword.size
-        end
-      else
-        idx_to_data[idx2].covers.size <=> idx_to_data[idx1].covers.size
-      end
-    end
+    order.sort_by! {|idx| tuple3(-idx_to_data[idx].covers.size,
+                                 idx_to_data[idx].encword.size,
+                                 idx_to_data[idx].encword) }
   end
 
   # Have a boolean TODO flag for each of the wordforms that needs to be
