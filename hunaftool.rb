@@ -87,10 +87,44 @@ eval_if_run_by_ruby "Regex = Regexp"
 module Cfg
   @@verbose = false
   @@prune_aff = false
-  def self.verbose?      ; @@verbose end
-  def self.verbose=(v)   ; @@verbose = v end
-  def self.prune_aff?    ; @@prune_aff end
-  def self.prune_aff=(v) ; @@prune_aff = v end
+
+  # These LRU settings are related to NEEDAFFIX processing. NEEDAFFIX allows
+  # having "virtual stems", which are not valid words themselves, but can form
+  # valid words when affixed. The number of potential virtual stems to evaluate
+  # is usually many times larger than the number of the real vaid words in the
+  # same dictionary. So careless handling of virtual stems may blow up RAM
+  # usage and trigger the OOM killer. Default settings need to be universally
+  # safe and prevent NEEDAFFIX memory requirements from being higher than
+  # one or two extra GB. This tool is expected to work nicely on computers
+  # with 8 GB of RAM.
+  #
+  # The size of the LRU cache with the virtual stem candidates in-flight.
+  # They are held in "quarantine" until they prove their usefulness.
+  @@lru_capacity = 1000000
+  # This is the minimal required number of references to a virtual stem
+  # before it gets accepted and moved from the LRU storage to the work
+  # buffer where valid words are stored. Basically, it's the number of
+  # words that can be potentially generated from that virtual stem. The
+  # values lower than 2 are rejected because a virtual stem than is able
+  # to only produce just one real word is useless.
+  @@lru_cutoff   = 2
+  # The automatic adaptive increase of the minimal required number of
+  # references to a virtual stem, which happens after this amount of
+  # virtual stems alredy got accepted. We need this configuration knob to
+  # automatically stop uncontrolled RAM usage spike in some pathologically
+  # bad scenarios.
+  @@lru_cutincr  = 200000
+
+  def self.verbose?           ; @@verbose end
+  def self.verbose=(v)        ; @@verbose = v end
+  def self.prune_aff?         ; @@prune_aff end
+  def self.prune_aff=(v)      ; @@prune_aff = v end
+  def self.lru_capacity       ; @@lru_capacity end
+  def self.lru_capacity=(v)   ; @@lru_capacity = v end
+  def self.lru_cutoff         ; @@lru_cutoff end
+  def self.lru_cutoff=(v)     ; @@lru_cutoff = v end
+  def self.lru_cutincr        ; @@lru_cutincr end
+  def self.lru_cutincr=(v)    ; @@lru_cutincr = v end
 end
 
 # Run a subtask with optional reporting about performance and memory usage
@@ -1229,20 +1263,62 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   # that aren't proper wordforms themselves), find the preliminary sets
   # of flags that can be potentially used to construct such wordforms.
   subtask "Find stem candidates and their preliminary affix flags" do
+    # Initialize the "quarantine" storage for potential virtual stems
+    lru = {"".bytes => tuple2(WordData.new, 0)}.clear
+    promoted_virtual_stems_cnt = 0
+    # Iterate over all real words and find their stems
     (0 ... virtual_stem_area_begin).each do |idx|
       aff.lookup_stem(idx_to_data[idx].encword) do |stem, pfx_flag, sfx_flag|
-        if (stem_idx = encword_to_idx.fetch(stem, -1)) != -1
+        # First lookup in the "quarantine" LRU storage
+        if (lru_tuple = lru.delete(stem))
+          data, cnt = lru_tuple[0], lru_tuple[1]
+          data.flags_merge(pfx_flag) if pfx_flag
+          data.flags_merge(sfx_flag) if sfx_flag
+          if (cnt += 1) >= Cfg.lru_cutoff
+            # The requirements are satisfied, move promote this virtual
+            # stem to the data buffer
+            encword_to_idx[data.encword] = idx_to_data.size
+            idx_to_data.push(data)
+            # If we are accepting too many virtual stems, then maybe we need
+            # to throttle this down
+            if Cfg.lru_cutincr > 0 && (promoted_virtual_stems_cnt += 1) >= Cfg.lru_cutincr
+              Cfg.lru_cutoff = Cfg.lru_cutoff + 1
+              promoted_virtual_stems_cnt = 0
+            end
+          else
+            # Put the virtual stem candidate back into the RLU after
+            # increasing its references counter
+            lru[data.encword] = tuple2(data, cnt)
+          end
+        # Now lookup in the words data buffer
+        elsif (stem_idx = encword_to_idx.fetch(stem, -1)) != -1
           idx_to_data[stem_idx].flags_merge(pfx_flag) if pfx_flag
           idx_to_data[stem_idx].flags_merge(sfx_flag) if sfx_flag
+        # This is the first reference to this virtual stem candidate
         elsif !aff_flags_empty?(aff.virtual_stem_flag) && !stem.empty?
-          stem_dup = stem.dup
-          encword_to_idx[stem_dup] = idx_to_data.size
-          data = WordData.new(stem_dup)
+          # Evict the oldest entry from the LRU if it's at the capacity
+          # limit. The unlucky oldest virtual stem candidate is dropped
+          lru.shift if Cfg.lru_capacity > 0 && lru.size >= Cfg.lru_capacity
+          # Create the WordData entry for the virtual stem candidate
+          data = WordData.new(stem.dup)
           data.flags_merge(aff.virtual_stem_flag)
           data.flags_merge(pfx_flag) if pfx_flag
           data.flags_merge(sfx_flag) if sfx_flag
-          idx_to_data.push(data)
+          # Put the virtual stem candidate into the LRU quarantine with
+          # its reference counter set to 1
+          lru[data.encword] = tuple2(data, 1)
         end
+      end
+    end
+    # In the end, evaluate the LRU cache, since these entries already
+    # occupy space in RAM and it would be a waste not to use them
+    lru.each do |stem, lru_tuple|
+      data, cnt = lru_tuple[0], lru_tuple[1]
+      # Virtual stems are only useful if they are able to produce at least
+      # two real words when affixed. Skip anything lower than that
+      if cnt >= 2
+        encword_to_idx[data.encword] = idx_to_data.size
+        idx_to_data.push(data)
       end
     end
   end
@@ -1558,6 +1634,21 @@ args = ARGV.select do |arg|
   elsif arg =~ /^\-o\=(\S+)$/
     output_format = $1
     nil
+  elsif arg =~ /^\-\-needaffix\-lru=(\d+),(\d+),(\d+)$/
+    Cfg.lru_capacity = [$1.to_i, 1000].max
+    Cfg.lru_cutoff   = [$2.to_i, 2].max
+    Cfg.lru_cutincr  = [$3.to_i, 0].max
+    nil
+  elsif arg =~ /^\--high\-mem$/
+    Cfg.lru_capacity = 0 # unlimited buffer with no evictions
+    Cfg.lru_cutoff   = 2 # the best value among those that are useful
+    Cfg.lru_cutincr  = 0 # cutoff never increases
+    nil
+  elsif arg =~ /^\-\-low\-mem$/
+    Cfg.lru_capacity = 10000
+    Cfg.lru_cutoff   = 2
+    Cfg.lru_cutincr  = 5000
+    nil
   elsif arg =~ /^\-/
     abort "Unrecognized command line option: '#{arg}'\n"
   else
@@ -1566,6 +1657,7 @@ args = ARGV.select do |arg|
 end
 
 unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
+  lru_defaults = "#{Cfg.lru_capacity},#{Cfg.lru_cutoff},#{Cfg.lru_cutincr}"
   puts "hunaftool v#{VERSION} - automated conversion between plain text word lists"
   puts "                 and .DIC files for Hunspell, tailoring them for some"
   puts "                 already existing .AFF file with affixes."
@@ -1596,6 +1688,12 @@ unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
   puts "                                     affix rules removed."
   puts "                             * js  - JavaScript code (TODO)"
   puts "                             * lua - Lua code (TODO)"
+  puts
+  puts "  --needaffix-lru=capacity,cutoff,cutincr"
+  puts "                          : memory usage tuning for the NEEDAFFIX flag"
+  puts "                            (defaults: #{lru_defaults})"
+  puts "  --low-mem               : reduce RAM usage at the expense of worse compression"
+  puts "  --high-mem              : allow unbounded RAM usage for extra compression"
   puts
   puts "An example of extracting all words from a dictionary:"
   puts "    ruby hunaftool.rb -i=dic -o=txt be_BY.aff be_BY.dic be_BY.txt"
