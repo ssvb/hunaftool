@@ -388,16 +388,18 @@ class String
   end
 end
 
-def aff_flags_to_s(flags)
+def aff_flags_to_a(flags)
   if flags.is_a?(Hash)
-    flags.keys.map {|idx| AffFlags.bitpos_to_flagname[idx] }.sort
-      .join((AffFlags.mode == AffFlags::NUM) ? "," : "")
+    flags.keys.map {|idx| AffFlags.bitpos_to_flagname[idx] }.to_a.sort
   else
     AffFlags.bitpos_to_flagname
       .each_index.select {|idx| (((I128_0 + 1) << idx) & flags) != 0 }
       .map {|idx| AffFlags.bitpos_to_flagname[idx] }.to_a.sort
-      .join((AffFlags.mode == AffFlags::NUM) ? "," : "")
   end
+end
+
+def aff_flags_to_s(flags)
+  aff_flags_to_a(flags).join((AffFlags.mode == AffFlags::NUM) ? "," : "")
 end
 
 def aff_flags_empty?(flags)
@@ -614,9 +616,16 @@ class AFF
   # The AF directive is used for remapping numeric identifiers to affix flags
   @@id_to_flagfield = {0 => ""}.clear
 
+    def flagname_bytecost(flagname)
+      @flagname_bytecost.fetch(flagname, 0)
+    end
+
   def initialize(aff_file, charlist = "", opt = RULESET_FROM_STEM)
     @affdata = (((opt & RULESET_TESTSTRING) != 0) ? aff_file
                                                   : File.read(aff_file))
+    # The total size of the affix file part related to this flag
+    @flagname_bytecost = {"" => 0}.clear
+
     virtual_stem_flag_s = ""
     forbiddenword_flag_s = ""
     AffFlags.mode = AffFlags::UTF8
@@ -744,6 +753,8 @@ class AFF
             next
           end
         end
+
+        @flagname_bytecost[flag] = @flagname_bytecost.fetch(flag, 0) + l.strip.bytesize + 1
 
         condition = (type == "S") ? condition.gsub(/#{Regex.escape(stripping)}$/, "") :
                                     condition.gsub(/^#{Regex.escape(stripping)}/, "")
@@ -1393,38 +1404,69 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     end
   end
 
-  order = idx_to_data.size.times.to_a
-  subtask "Sort stem candidates by the number of their wordforms" do
-    order.sort_by! {|idx| tuple3(-idx_to_data[idx].covers.size,
-                                 idx_to_data[idx].encword.size,
-                                 idx_to_data[idx].encword) }
-  end
+  # stem candidate indexes to be sorted according to various rules
+  order_of_greedy_selection = idx_to_data.size.times.to_a
 
-  # Have a boolean TODO flag for each of the wordforms that needs to be
-  # present in the dictionary.
-  todo = [true] * virtual_stem_area_begin
-  final_result = [tuple2([U8_0], "")].clear
+  # the number of times each of the flags was used in the generated .dic
+  flagname_freq = {"" => 0}.clear
 
-  subtask "Greedily choose useful stems and optimize their affix flags" do
-    order.each do |idx|
+  # Initially assume zero cost of having the affix file. We benefit from not having
+  # to list the generated wordforms on each line, minus the size of the stem.
+  stem_usefulness = idx_to_data.size.times.map do |idx|
+    data = idx_to_data[idx]
+    opt_flags = optimize_flags(aff, data.encword, data.flags) {|wordform| true }
+    idx_to_data[idx].covers.map {|idx2| idx_to_data[idx2].encword.to_utf8.bytesize + 1 }.sum -
+      (idx_to_data[idx].encword.to_utf8.bytesize + 2 + aff_flags_to_s(opt_flags).bytesize)
+  end.to_a
+
+  subtask "Pass 1: estimate flags frequencies, assuming zero cost of the affix file" do
+    order_of_greedy_selection.sort_by! {|idx| -stem_usefulness[idx] }
+    stems_todo = [true] * virtual_stem_area_begin
+    order_of_greedy_selection.each do |idx|
       data = idx_to_data[idx]
-      effectivelycovers = data.covers.count {|idx2| todo[idx2] }
-      # It's not useful to have a stem producing only one wordform since we
-      # can always just add that wordform itself without any fancy flags.
-      if effectivelycovers > 1
-        data.flags = optimize_flags(aff, data.encword, data.flags) do |wordform|
-          todo[encword_to_idx[wordform]]
+      if data.covers.count {|idx2| stems_todo[idx2] } > 1
+        opt_flags = optimize_flags(aff, data.encword, data.flags) do |wordform|
+          stems_todo[encword_to_idx[wordform]]
         end
-        final_result << tuple2(data.encword, aff_flags_to_s(data.flags))
-        # remove the result from the TODO list
-        data.covers.each {|idx2| todo[idx2] = false }
+        data.covers.each {|idx2| stems_todo[idx2] = false }
+        # Flags frequencies
+        aff_flags_to_a(opt_flags).each do |flagname|
+          flagname_freq[flagname] = flagname_freq.fetch(flagname, 0) + 1
+        end
       end
     end
   end
 
-  subtask "Add the leftover wordforms without any affix flags" do
-    todo.each_index do |idx|
-      final_result << tuple2(idx_to_data[idx].encword, "") if todo[idx]
+  stem_usefulness.each_index do |idx|
+    data = idx_to_data[idx]
+    opt_flags = optimize_flags(aff, data.encword, data.flags) {|wordform| true }
+    amcost = aff_flags_to_a(opt_flags).map do |flagname|
+      aff.flagname_bytecost(flagname).to_f / flagname_freq.fetch(flagname, 1)
+    end.sum.to_i
+    stem_usefulness[idx] -= amcost
+  end
+
+  final_result = [tuple2([U8_0], "")].clear
+  subtask "Pass 2: take into account amortized affix rules cost" do
+    order_of_greedy_selection.sort_by! {|idx| -stem_usefulness[idx] }
+    stems_todo = [true] * virtual_stem_area_begin
+    order_of_greedy_selection.each do |idx|
+      data = idx_to_data[idx]
+      opt_flags = optimize_flags(aff, data.encword, data.flags) do |wordform|
+        stems_todo[encword_to_idx[wordform]]
+      end
+      amcost = aff_flags_to_a(opt_flags).map do |flagname|
+        aff.flagname_bytecost(flagname).to_f / flagname_freq.fetch(flagname, 1)
+      end.sum.to_i
+      benefit = idx_to_data[idx].covers.select {|idx2| stems_todo[idx2] }.map {|idx2| idx_to_data[idx2].encword.to_utf8.bytesize + 1 }.sum -
+         (idx_to_data[idx].encword.to_utf8.bytesize + 2 + aff_flags_to_s(opt_flags).bytesize + amcost)
+      if benefit > 0
+        data.covers.each {|idx2| stems_todo[idx2] = false }
+        final_result << tuple2(data.encword, aff_flags_to_s(opt_flags))
+      end
+    end
+    stems_todo.each_index do |idx|
+      final_result << tuple2(idx_to_data[idx].encword, "") if stems_todo[idx]
     end
   end
 
