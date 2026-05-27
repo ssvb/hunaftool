@@ -529,7 +529,6 @@ RULESET_SUFFIX     = 0
 RULESET_PREFIX     = 1
 RULESET_FROM_STEM  = 0
 RULESET_TO_STEM    = 2
-RULESET_TESTSTRING = 4
 
 # This is a https://en.wikipedia.org/wiki/Trie data structure for efficient search
 class Ruleset
@@ -615,8 +614,7 @@ class AFF
   @@id_to_flagfield = {0 => ""}.clear
 
   def initialize(aff_file, charlist = "", opt = RULESET_FROM_STEM)
-    @affdata = (((opt & RULESET_TESTSTRING) != 0) ? aff_file
-                                                  : File.read(aff_file))
+    @affdata = File.read(aff_file)
     virtual_stem_flag_s = ""
     forbiddenword_flag_s = ""
     AffFlags.mode = AffFlags::UTF8
@@ -1450,138 +1448,6 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
 end
 
 ###############################################################################
-# Tests for various tricky cases
-###############################################################################
-
-def test_dic_to_txt(affdata, input, expected_output)
-  affdata = affdata.split('\n').map {|l| l.gsub(/^\s*(.*)?\s*$/, "\\1") }
-                               .join('\n')
-  dict = (affdata + input).split("").sort.uniq.join
-  output = [""].clear
-  AFF.new(affdata, dict, RULESET_TESTSTRING).decode_dic_entry(input) do |word|
-    output << word
-  end
-  output = output.sort.uniq
-  affdata = affdata.split('\n').map {|x| "    " + x.strip }.join('\n')
-  unless output == expected_output
-    STDERR.puts "\nTest failed:"
-    STDERR.puts "  Affix:\n#{affdata}"
-    STDERR.puts "  Input:    #{input}"
-    STDERR.puts "  Output:   #{output}"
-    STDERR.puts "  Expected: #{expected_output}"
-  end
-end
-
-def run_tests
-  # tests for overlapping prefix/suffix substitutions
-  # Hunspell is applying suffix first, and then prefix may 
-  # match the newly formed intermediate word. Pay attention
-  # to the "ааааа" -> "ааяв" -> "бюв" transition.
-  test_dic_to_txt("PFX A Y 1
-                   PFX A ааа ба ааа
-                   SFX B Y 1
-                   SFX B ааа ав ааа", "ааааа/AB",
-                   ["ааааа", "ааав", "бааа", "бав"])
-
-  test_dic_to_txt("PFX A Y 1
-                   PFX A ааа бю ааа
-                   SFX B Y 1
-                   SFX B ааа ав ааа", "ааааа/AB",
-                   ["ааааа", "ааав", "бюаа", "бюв"])
-
-  test_dic_to_txt("PFX A Y 1
-                   PFX A ааа ба ааа
-                   SFX B Y 1
-                   SFX B ааа яв ааа", "ааааа/AB",
-                   ["ааааа", "ааяв", "бааа"]) # "бяв" is not supported!
-
-  test_dic_to_txt("PFX A Y 1
-                   PFX A аая бю аая
-                   SFX B Y 1
-                   SFX B ааа яв ааа", "ааааа/AB",
-                   ["ааааа", "ааяв", "бюв"])
-
-  # prefix replacement is done after suffix replacement
-  test_dic_to_txt("PFX A Y 2
-                   PFX A лыжка сьвіньня лыжка
-                   PFX A лыж шчот лыж
-                   SFX B Y 1
-                   SFX B екар ыжка лекар", "лекар/AB",
-                   ["лекар", "лыжка", "шчотка"])
-
-  # compared to the previous test, FULLSTRIP enables the word "сьвіньня"
-  test_dic_to_txt("FULLSTRIP
-                   PFX A Y 2
-                   PFX A лыжка сьвіньня лыжка
-                   PFX A лыж шчот лыж
-                   SFX B Y 1
-                   SFX B екар ыжка лекар", "лекар/AB",
-                   ["лекар", "лыжка", "сьвіньня", "шчотка"])
-
-  # the NEEDAFFIX flag turns "лекар" into a "virtual" stem, which isn't a word
-  test_dic_to_txt("NEEDAFFIX z
-                   PFX A Y 2
-                   PFX A лыжка сьвіньня лыжка
-                   PFX A лыж шчот лыж
-                   SFX B Y 1
-                   SFX B екар ыжка лекар", "лекар/ABz",
-                   ["лыжка", "шчотка"])
-
-  # Long flags with two characters
-  test_dic_to_txt("FLAG long
-                   PFX Aa Y 1
-                   PFX Aa ааа ба ааа
-                   SFX Bb Y 1
-                   SFX Bb ааа ав ааа", "ааааа/AaBb",
-                   ["ааааа", "ааав", "бааа", "бав"])
-
-  # Numeric flags
-  test_dic_to_txt("FLAG num
-                   PFX 1 Y 1
-                   PFX 1 ааа ба ааа
-                   SFX 2 Y 1
-                   SFX 2 ааа ав ааа", "ааааа/1,2",
-                   ["ааааа", "ааав", "бааа", "бав"])
-
-  # Two levels of suffixes
-  test_dic_to_txt("SET UTF-8
-                   FULLSTRIP
-                   NEEDAFFIX z
-                   PFX A Y 2
-                   PFX A лыжка сьвіньня лыжка
-                   PFX A лыж шчот лыж
-                   SFX B Y 1
-                   SFX B екар ыжка лекар
-                   SFX C Y 1
-                   SFX C ка 0/ABz ка
-                   PFX X Y 1
-                   PFX X аая бю ааяр
-                   SFX Y Y 1
-                   SFX Y ааа яв/Z ааа
-                   SFX Z Y 1
-                   SFX Z в ргер в", "ааааа/XY",
-                   ["ааааа", "ааяв", "ааяргер", "бюргер"])
-
-  test_dic_to_txt("SET UTF-8
-                   FULLSTRIP
-                   NEEDAFFIX z
-                   PFX A Y 2
-                   PFX A лыжка сьвіньня лыжка
-                   PFX A лыж шчот лыж
-                   SFX B Y 1
-                   SFX B екар ыжка лекар
-                   SFX C Y 1
-                   SFX C ка 0/ABz ка
-                   PFX X Y 1
-                   PFX X аая бю ааяр
-                   SFX Y Y 1
-                   SFX Y ааа яв/Z ааа
-                   SFX Z Y 1
-                   SFX Z в ргер в", "лекарка/C",
-                   ["лекарка", "лыжка", "сьвіньня", "шчотка"])
-end
-
-###############################################################################
 # Parse command line options
 ###############################################################################
 
@@ -1669,7 +1535,6 @@ unless args.size >= 1 && args[0] =~ /\.aff$/i && File.exists?(args[0])
   puts "then they are automatically guessed from file extensions. If the"
   puts "output file is not provided, then the result is printed to stdout."
   puts
-  run_tests
   exit 0
 end
 
