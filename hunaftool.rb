@@ -1169,7 +1169,7 @@ end
 # TODO: bruteforce the exact solution for the small sets of flags.
 ###############################################################################
 
-def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
+def optimize_flags(aff, stem, flags)
   # Empty flags sample
   empty_flags = aff_flags_delete!(flags.dup, flags)
   # Empty flags is a special slot. It's needed just in case if there's zero
@@ -1216,7 +1216,7 @@ def optimize_flags(aff, stem, flags, flag_freqs, flag_names)
 
   # Greedy selection, starting from those flags that cover more wordforms. Ties
   # are resolved by alphabetic sorting of the affix flag names.
-  flag_covers_sorted = flag_covers.to_a.sort_by {|x| tuple2(-x[1].size, flag_names[x[0]]) }
+  flag_covers_sorted = flag_covers.to_a.sort_by {|x| tuple2(-x[1].size, aff_flags_to_s(x[0])) }
   result_flags = (have_needaffix ? aff.virtual_stem_flag.dup : empty_flags.dup)
   already_covered = [stem].to_set.clear
   flag_covers_sorted.each do |flag, wordforms|
@@ -1322,12 +1322,8 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
     end
   end
 
-  # Frequency statistics for different flags usage
-  flag_freqs = {"".to_aff_flags => 0}.clear
-  flag_names = {"".to_aff_flags => ""} # have a name for the empty flags too
-  tmp_covers = [0].to_set.clear
-
   subtask "Filter out bad affix flags from stems" do
+    tmp_covers = [0].to_set.clear
     idx_to_data.each_with_index do |data, idx|
       # Nothing to do for the entries that have no flags to begin with
       next if aff_flags_empty?(data.flags)
@@ -1391,30 +1387,6 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
         next if forbidden
         if (tmpidx = encword_to_idx.fetch(wordform, virtual_stem_area_begin)) < virtual_stem_area_begin
           tmp_covers.add(tmpidx)
-
-          # Collect flag names and their usage statistics
-          if pfx_flag && sfx_flag
-            tmp_flag_dup = aff_flags_merge!(pfx_flag.dup, sfx_flag)
-            unless flag_freqs.has_key?(tmp_flag_dup)
-              flag_freqs[tmp_flag_dup] = 0
-              flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
-            end
-            flag_freqs[tmp_flag_dup] += 1
-          elsif pfx_flag
-            unless flag_freqs.has_key?(pfx_flag)
-              tmp_flag_dup = pfx_flag.dup
-              flag_freqs[tmp_flag_dup] = 0
-              flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
-            end
-            flag_freqs[pfx_flag] += 1
-          elsif sfx_flag
-            unless flag_freqs.has_key?(sfx_flag)
-              tmp_flag_dup = sfx_flag.dup
-              flag_freqs[tmp_flag_dup] = 0
-              flag_names[tmp_flag_dup] = aff_flags_to_s(tmp_flag_dup)
-            end
-            flag_freqs[sfx_flag] += 1
-          end
         end
       end
       data.covers = tmp_covers.to_a
@@ -1440,8 +1412,9 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
       # It's not useful to have a stem producing only one wordform since we
       # can always just add that wordform itself without any fancy flags.
       if effectivelycovers > 1
-        data.flags = optimize_flags(aff, data.encword, data.flags, flag_freqs,
-                                    flag_names) {|wordform| todo[encword_to_idx[wordform]] }
+        data.flags = optimize_flags(aff, data.encword, data.flags) do |wordform|
+          todo[encword_to_idx[wordform]]
+        end
         final_result << tuple2(data.encword, aff_flags_to_s(data.flags))
         # remove the result from the TODO list
         data.covers.each {|idx2| todo[idx2] = false }
