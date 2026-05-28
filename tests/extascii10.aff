@@ -1,0 +1,16 @@
+SET CP1251
+FULLSTRIP
+NEEDAFFIX z
+PFX A Y 2
+PFX A лыжка сьвіньня лыжка
+PFX A лыж шчот лыж
+SFX B Y 1
+SFX B екар ыжка лекар
+SFX C Y 1
+SFX C ка 0/ABz ка
+PFX X Y 1
+PFX X аая бю ааяр
+SFX Y Y 1
+SFX Y ааа яв/Z ааа
+SFX Z Y 1
+SFX Z в ргер в

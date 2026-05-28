@@ -1,0 +1,6 @@
+SET CP1251
+FLAG long
+PFX Aa Y 1
+PFX Aa ‡‡‡ ·‡ ‡‡‡
+SFX Bb Y 1
+SFX Bb ‡‡‡ ‡‚ ‡‡‡

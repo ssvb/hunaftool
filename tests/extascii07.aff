@@ -1,0 +1,7 @@
+SET CP1251
+NEEDAFFIX z
+PFX A Y 2
+PFX A лыжка сьвіньня лыжка
+PFX A лыж шчот лыж
+SFX B Y 1
+SFX B екар ыжка лекар

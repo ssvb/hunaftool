@@ -89,6 +89,11 @@ module Cfg
   @@verbose = false
   @@prune_aff = false
 
+  # Assume 8-bit ISO-8859-1 encoding by default just like it is done by Hunspell
+  @@encoding = "ISO-8859-1"
+  def self.encoding       ; @@encoding + (COMPILED_BY_CRYSTAL ? "" : ":utf-8") end
+  def self.encoding=(v)   ; @@encoding = v end
+
   # These LRU settings are related to NEEDAFFIX processing. NEEDAFFIX allows
   # having "virtual stems", which are not valid words themselves, but can form
   # valid words when affixed. The number of potential virtual stems to evaluate
@@ -272,9 +277,9 @@ class Array
   end
 end
 
-def alphabet_from_file(filename)
+def alphabet_from_file(filename, encoding)
   used_alphabet = {'A' => true}.clear
-  File.open(filename).each_char {|ch| used_alphabet[ch] = true }
+  File.open(filename, encoding: encoding).each_char {|ch| used_alphabet[ch] = true }
   return used_alphabet.keys.join
 end
 
@@ -614,7 +619,12 @@ class AFF
   @@id_to_flagfield = {0 => ""}.clear
 
   def initialize(aff_file, charlist = "", opt = RULESET_FROM_STEM)
-    @affdata = File.read(aff_file)
+    @affdata = File.read(aff_file, encoding: Cfg.encoding)
+    # If the encoding is specified, then just change it and re-read the whole file
+    if @affdata =~ /^SET\s+(\S+)/m
+      Cfg.encoding = $1
+      @affdata = File.read(aff_file, encoding: Cfg.encoding)
+    end
     virtual_stem_flag_s = ""
     forbiddenword_flag_s = ""
     AffFlags.mode = AffFlags::UTF8
@@ -1043,7 +1053,7 @@ def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_fi
 
   real_number_of_stems = 0
   expected_number_of_stems = -1
-  File.open(dic_file).each_line do |l|
+  File.open(dic_file, encoding: Cfg.encoding).each_line do |l|
     l = l.strip
     if firstline
       firstline = false
@@ -1104,7 +1114,8 @@ def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_fi
     if out_file
       File.write(out_file, aff.aff_data_with_pruned_rules)
     else
-      puts aff.aff_data_with_pruned_rules
+      STDOUT.set_encoding(Cfg.encoding)
+      STDOUT.puts aff.aff_data_with_pruned_rules
     end
     return
   end
@@ -1138,8 +1149,8 @@ def convert_dic_to_txt(aff_file, dic_file, delimiter = nil, out_file = nil)
     try_convert_dic_to_txt("", aff_file, dic_file, delimiter, out_file)
   rescue AlphabetException
     STDERR.puts "! The TRY directive should preferably cover the whole alphabet."
-    a1 = alphabet_from_file(aff_file)
-    a2 = alphabet_from_file(dic_file)
+    a1 = alphabet_from_file(aff_file, Cfg.encoding)
+    a2 = alphabet_from_file(dic_file, Cfg.encoding)
     try_convert_dic_to_txt(a1 + a2, aff_file, dic_file, delimiter, out_file)
   end
 end
@@ -1427,7 +1438,8 @@ def try_convert_txt_to_dic(alphabet, aff_file, txt_file, out_file = nil)
   end
 
   subtask "Write sorted results to «#{out_file ? out_file : "stdout"}»" do
-    fh = (out_file ? File.open(out_file, "w") : STDOUT)
+    STDOUT.set_encoding(Cfg.encoding)
+    fh = (out_file ? File.open(out_file, "w", encoding: Cfg.encoding) : STDOUT)
     fh.puts final_result.size
     final_result.sort {|a, b| (cmp = a[0].collate(b[0])) == 0 ? a[1] <=> b[1] : cmp }.each do |v|
       fh.puts "#{v[0].to_utf8}#{v[1].empty? ? "" : "/"}#{v[1]}"
@@ -1441,8 +1453,8 @@ def convert_txt_to_dic(aff_file, txt_file, out_file = nil)
     try_convert_txt_to_dic("", aff_file, txt_file, out_file)
   rescue AlphabetException
     STDERR.puts "! The TRY directive should preferably cover the whole alphabet."
-    a1 = alphabet_from_file(aff_file)
-    a2 = alphabet_from_file(txt_file)
+    a1 = alphabet_from_file(aff_file, Cfg.encoding)
+    a2 = alphabet_from_file(txt_file, "UTF-8")
     try_convert_txt_to_dic(a1 + a2, aff_file, txt_file, out_file)
   end
 end
