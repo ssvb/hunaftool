@@ -347,8 +347,8 @@ module AffFlags
       STDERR.puts "! The long flag must be exactly 2 characters, but «#{flagname}» is not compliant."
       return if flagname.size < 2
       flagname = flagname[0, 2]
-    elsif @@mode == NUM && (!(flagname =~ /^(\d+)(.*)$/) || !$2.empty? || $1.to_i >= 65510)
-      STDERR.puts "! The num flag must be a decimal number <= 65509, but «#{flagname}» is not compliant."
+    elsif @@mode == NUM && (!(flagname =~ /^(\d+)(.*)$/) || !$2.empty? || $1.to_i >= 65536)
+      STDERR.puts "! The num flag must be a decimal number <= 65535, but «#{flagname}» is not compliant."
       abort "! It's too tricky to emulate this aspect of Hunspell's behaviour. Aborting...\n"
     end
     return if @@flagname_s_to_bitpos.has_key?(flagname)
