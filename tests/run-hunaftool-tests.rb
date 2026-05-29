@@ -13,18 +13,18 @@ def run_tests(dir, cmdlines)
     dicfile = filename.gsub(/\.aff/i, ".dic")
     txtfile = filename.gsub(/\.aff/i, ".txt")
     csvfile = filename.gsub(/\.aff/i, ".csv")
-    goodfile = filename.gsub(/\.aff/i, ".good")
-    goodfilecsv = filename.gsub(/\.aff/i, ".good.csv")
-    goodfiledic = filename.gsub(/\.aff/i, ".good.dic")
+    exactfile = filename.gsub(/\.aff/i, ".exact")
+    exactfilecsv = filename.gsub(/\.aff/i, ".exact.csv")
+    exactfiledic = filename.gsub(/\.aff/i, ".exact.dic")
     txtfile = csvfile unless File.exist?(txtfile)
-    goodfile = goodfilecsv unless File.exist?(goodfile)
+    exactfile = exactfilecsv unless File.exist?(exactfile)
 
-    if File.exist?(dicfile) && File.exist?(goodfile)
+    if File.exist?(dicfile) && File.exist?(exactfile)
       # .dic file decoding
-      fmt = File.exist?(goodfilecsv) ? "csv" : "txt"
+      fmt = File.exist?(exactfilecsv) ? "csv" : "txt"
       cmdlines.each do |cmdline|
         result = `#{cmdline} -o=#{fmt} #{filename} #{dicfile}`.lines.map {|l| l.strip }
-        expected = File.read(goodfile).lines.map {|l| l.strip }.sort
+        expected = File.read(exactfile).lines.map {|l| l.strip }.sort
         if result != expected
           STDERR.puts "\n== Test «#{cmdline} -o=#{fmt} #{filename} #{dicfile}» failed:"
           STDERR.puts "== Expected: =="
@@ -35,11 +35,11 @@ def run_tests(dir, cmdlines)
           exit 1
         end
       end
-    elsif File.exist?(txtfile) && File.exist?(goodfiledic)
+    elsif File.exist?(txtfile) && File.exist?(exactfiledic)
       # .dic file encoding
       cmdlines.each do |cmdline|
         result = `#{cmdline} -o=dic #{filename} #{txtfile}`.lines.map {|l| l.strip }
-        expected = File.read(goodfiledic).lines.map {|l| l.strip }
+        expected = File.read(exactfiledic).lines.map {|l| l.strip }
         if result != expected
           STDERR.puts "\n== Test «#{cmdline} -o=dic #{filename} #{txtfile}» failed:"
           STDERR.puts "== Expected: =="
