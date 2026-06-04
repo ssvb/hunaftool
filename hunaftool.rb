@@ -619,11 +619,17 @@ class AFF
   @@id_to_flagfield = {0 => ""}.clear
 
   def initialize(aff_file, charlist = "", opt = RULESET_FROM_STEM)
+    Cfg.encoding = "ISO-8859-1"
     @affdata = File.read(aff_file, encoding: Cfg.encoding)
+    # erase UTF-8 bom
+    havebom = (@affdata.size >= 3 && @affdata[0 .. 2] == "ï»¿")
+    @affdata = @affdata[3 .. -1] if havebom
     # If the encoding is specified, then just change it and re-read the whole file
     if @affdata =~ /^SET\s+(\S+)/m
       Cfg.encoding = $1
       @affdata = File.read(aff_file, encoding: Cfg.encoding)
+      # erase UTF-8 bom
+      @affdata = @affdata[(Cfg.encoding =~ /^UTF/i ? 1 : 3) .. -1] if havebom
     end
     virtual_stem_flag_s = ""
     forbiddenword_flag_s = ""
@@ -1057,6 +1063,7 @@ def try_convert_dic_to_txt(alphabet, aff_file, dic_file, delimiter = nil, out_fi
     l = l.strip
     if firstline
       firstline = false
+      l = l[1 .. -1] if l.size > 0 && l[0].ord == 0xFEFF # erase UTF-8 bom
       if l =~ /^\s*(\d+)\s*$/
         expected_number_of_stems = $1.to_i
         next
